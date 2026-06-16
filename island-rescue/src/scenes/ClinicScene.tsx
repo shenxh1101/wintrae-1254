@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useGameStore } from '../store/useGameStore';
 import { ANIMALS } from '../data/gameData';
-import { RescuedAnimal } from '../types/game';
+import { RescuedAnimal, CareEvent } from '../types/game';
 
 export const ClinicScene = () => {
   const {
@@ -11,6 +11,7 @@ export const ClinicScene = () => {
     assignToCareSlot,
     releaseAnimal,
     inventory,
+    completeCareEvent,
   } = useGameStore();
   const [selectedAnimal, setSelectedAnimal] = useState<RescuedAnimal | null>(null);
   const [message, setMessage] = useState('');
@@ -24,6 +25,11 @@ export const ClinicScene = () => {
     const medicine = inventory.find(i => i.id === 'medicine')?.quantity || 0;
     const towel = inventory.find(i => i.id === 'towel')?.quantity || 0;
     return bandage > 0 && medicine > 0 && towel > 0;
+  };
+
+  const hasFood = () => {
+    const food = inventory.find(i => i.id === 'food')?.quantity || 0;
+    return food > 0;
   };
 
   const handleTreat = (animalId: string) => {
@@ -52,6 +58,17 @@ export const ClinicScene = () => {
     }
   };
 
+  const handleCareEvent = (rescuedId: string, eventId: string) => {
+    if (!hasFood()) {
+      setMessage('⚠️ 鱼食不足！去仓库商店购买一些吧~');
+      setTimeout(() => setMessage(''), 2000);
+      return;
+    }
+    completeCareEvent(rescuedId, eventId);
+    setMessage('💕 照护完成！动物恢复得更快了~');
+    setTimeout(() => setMessage(''), 2000);
+  };
+
   const getAnimalData = (animalId: string) => ANIMALS.find(a => a.id === animalId);
 
   const getStatusText = (status: string) => {
@@ -74,7 +91,70 @@ export const ClinicScene = () => {
     }
   };
 
+  const getCareEventTypeColor = (type: string) => {
+    switch (type) {
+      case 'feed': return 'bg-orange-100 text-orange-700 border-orange-300';
+      case 'clean': return 'bg-cyan-100 text-cyan-700 border-cyan-300';
+      case 'play': return 'bg-purple-100 text-purple-700 border-purple-300';
+      default: return 'bg-gray-100 text-gray-700 border-gray-300';
+    }
+  };
+
   const availableSlots = careSlots.filter(s => s.unlocked && !s.occupiedBy);
+
+  const renderCareEvents = (animal: RescuedAnimal) => {
+    const pendingEvents = animal.careEvents.filter(e => !e.completed);
+    const completedEvents = animal.careEvents.filter(e => e.completed);
+
+    if (pendingEvents.length === 0 && completedEvents.length === 0) return null;
+
+    return (
+      <div className="mt-3 space-y-2">
+      {pendingEvents.length > 0 && (
+        <div>
+          <p className="text-xs text-gray-500 mb-1 font-medium">📋 需要照护:</p>
+          <div className="space-y-2">
+            {pendingEvents.map(event => (
+              <div
+                key={event.id}
+                className={`p-2 rounded-lg border-2 flex items-center justify-between bg-white ${getCareEventTypeColor(event.type)}`}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">{event.emoji}</span>
+                  <div>
+                    <p className="text-sm font-medium">{event.title}</p>
+                    <p className="text-xs opacity-80">{event.description}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleCareEvent(animal.id, event.id);
+                  }}
+                  disabled={!hasFood()}
+                  className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${
+                    hasFood()
+                      ? 'bg-white hover:bg-gray-50 shadow-sm'
+                      : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                  }`}
+                >
+                    🐟 完成
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+          )}
+          {completedEvents.length > 0 && (
+            <div className="pt-1">
+              <p className="text-xs text-gray-400">
+                ✅ 已完成: {completedEvents.map(e => e.title).join('、')}
+              </p>
+            </div>
+          )}
+        </div>
+      );
+  };
 
   return (
     <div className="flex-1 bg-gradient-to-b from-pink-100 to-blue-100 p-4 overflow-auto">
@@ -96,14 +176,14 @@ export const ClinicScene = () => {
           <h3 className="font-bold text-gray-700 mb-3">📦 医疗物资</h3>
           <div className="flex gap-4 flex-wrap">
             {inventory.filter(i => i.type === 'supply').map(item => (
-              <div key={item.id} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
-                <span className="text-2xl">{item.emoji}</span>
-                <div>
-                  <p className="text-sm font-medium text-gray-700">{item.name}</p>
-                  <p className="text-xs text-gray-500">× {item.quantity}</p>
-                </div>
+            <div key={item.id} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
+              <span className="text-2xl">{item.emoji}</span>
+              <div>
+                <p className="text-sm font-medium text-gray-700">{item.name}</p>
+                <p className="text-xs text-gray-500">× {item.quantity}</p>
               </div>
-            ))}
+            </div>
+          ))}
           </div>
         </div>
 
@@ -113,7 +193,7 @@ export const ClinicScene = () => {
             <h3 className="font-bold text-lg text-red-600 mb-3 flex items-center gap-2">
               <span>🩹</span> 待治疗 ({injuredAnimals.length})
             </h3>
-            <div className="space-y-2 max-h-[300px] overflow-y-auto">
+            <div className="space-y-2 max-h-[400px] overflow-y-auto">
               {injuredAnimals.length === 0 ? (
                 <p className="text-gray-400 text-center py-8">没有需要治疗的动物</p>
               ) : (
@@ -245,6 +325,11 @@ export const ClinicScene = () => {
                             style={{ width: `${animalInSlot.health}%` }}
                           />
                         </div>
+                        {animalInSlot.recoverySpeedBoost > 0 && (
+                          <p className="text-xs text-green-600 mt-1">
+                            ⚡ 恢复加速 +{animalInSlot.recoverySpeedBoost}%
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>
@@ -258,7 +343,7 @@ export const ClinicScene = () => {
             <h3 className="font-bold text-lg text-green-600 mb-3 flex items-center gap-2">
               <span>🌿</span> 康复中 / 可放归
             </h3>
-            <div className="space-y-2 max-h-[300px] overflow-y-auto">
+            <div className="space-y-2 max-h-[400px] overflow-y-auto">
               {[...recoveringAnimals, ...readyAnimals].length === 0 ? (
                 <p className="text-gray-400 text-center py-8">没有康复中的动物</p>
               ) : (
@@ -294,6 +379,10 @@ export const ClinicScene = () => {
                           />
                         </div>
                       </div>
+                      {animal.recoverySpeedBoost > 0 && (
+                        <p className="text-xs text-green-600 mt-1">⚡ 恢复加速 +{animal.recoverySpeedBoost}%</p>
+                      )}
+                      {renderCareEvents(animal)}
                       {animal.status === 'ready' && (
                         <button
                           onClick={() => handleRelease(animal.id)}
@@ -353,7 +442,28 @@ export const ClinicScene = () => {
                     />
                   </div>
                 </div>
+                {selectedAnimal.recoverySpeedBoost > 0 && (
+                  <p className="text-sm text-green-600 text-center">⚡ 当前恢复加速 +{selectedAnimal.recoverySpeedBoost}%</p>
+                )}
               </div>
+              {selectedAnimal.careEvents.length > 0 && (
+                <div className="mt-4">
+                  <h4 className="font-bold text-gray-700 mb-2">📋 照护记录</h4>
+                  {selectedAnimal.careEvents.map(event => (
+                    <div key={event.id} className={`p-2 rounded-lg mb-1 flex items-center gap-2 ${
+                      event.completed ? 'bg-green-50' : 'bg-yellow-50'}`}>
+                      <span className="text-xl">{event.emoji}</span>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">{event.title}</p>
+                        <p className="text-xs text-gray-500">{event.description}</p>
+                      </div>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${event.completed ? 'bg-green-200 text-green-700' : 'bg-yellow-200 text-yellow-700'}`}>
+                        {event.completed ? '已完成' : '待处理'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="mt-6 flex gap-3">
                 <button
                   onClick={() => setSelectedAnimal(null)}

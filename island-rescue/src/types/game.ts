@@ -9,6 +9,29 @@ export interface Animal {
   reputationReward: number;
 }
 
+export interface CareEvent {
+  id: string;
+  type: 'feed' | 'clean' | 'play';
+  title: string;
+  description: string;
+  emoji: string;
+  reward: number;
+  completed: boolean;
+  dayGenerated: number;
+}
+
+export interface RecoveryRecord {
+  id: string;
+  animalId: string;
+  animalName: string;
+  animalEmoji: string;
+  rescueDate: number;
+  releaseDate: number;
+  careEvents: string[];
+  totalDays: number;
+  notes: string;
+}
+
 export interface RescuedAnimal {
   id: string;
   animalId: string;
@@ -19,6 +42,8 @@ export interface RescuedAnimal {
   status: 'injured' | 'treating' | 'recovering' | 'ready';
   careSlotId?: string;
   treatmentProgress: number;
+  careEvents: CareEvent[];
+  recoverySpeedBoost: number;
 }
 
 export interface CareSlot {
@@ -48,16 +73,23 @@ export interface BeachFind {
   value: number;
 }
 
+export interface PendingItem {
+  id: string;
+  item: BeachFind;
+  foundAt: number;
+}
+
 export interface Task {
   id: string;
   title: string;
   description: string;
-  type: 'daily' | 'weekly' | 'special';
+  type: 'daily' | 'weekly' | 'special' | 'festival';
   target: number;
   progress: number;
   reward: { type: string; amount: number };
   completed: boolean;
   claimed: boolean;
+  festivalId?: string;
 }
 
 export interface Weather {
@@ -77,6 +109,22 @@ export interface FestivalEvent {
   description: string;
   duration: number;
   effects: string[];
+  startDay: number;
+  remainingDays: number;
+}
+
+export interface FestivalLog {
+  id: string;
+  festivalId: string;
+  festivalName: string;
+  festivalEmoji: string;
+  startDay: number;
+  endDay: number;
+  animalsRescued: number;
+  animalsReleased: number;
+  coinsEarned: number;
+  reputationEarned: number;
+  tasksCompleted: number;
 }
 
 export interface Decoration {
@@ -101,8 +149,11 @@ export interface GameState {
   discoveredAnimals: string[];
   tasks: Task[];
   activeFestival?: FestivalEvent;
+  festivalLogs: FestivalLog[];
+  recoveryRecords: RecoveryRecord[];
   decorations: string[];
   warehouseLevel: number;
   warehouseCapacity: number;
   lastBeachSearch?: number;
+  pendingItems: PendingItem[];
 }

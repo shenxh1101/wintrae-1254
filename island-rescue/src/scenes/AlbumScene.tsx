@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { useGameStore } from '../store/useGameStore';
 import { ANIMALS } from '../data/gameData';
-import { Animal } from '../types/game';
+import { Animal, RecoveryRecord } from '../types/game';
 
 export const AlbumScene = () => {
-  const { discoveredAnimals, reputation } = useGameStore();
+  const { discoveredAnimals, reputation, getRecoveryRecords } = useGameStore();
   const [selectedAnimal, setSelectedAnimal] = useState<Animal | null>(null);
+  const [activeTab, setActiveTab] = useState<'album' | 'records'>('album');
+  const recoveryRecords = getRecoveryRecords();
 
   const rarityColors: Record<string, string> = {
     common: 'from-gray-400 to-gray-500',
@@ -36,70 +38,152 @@ export const AlbumScene = () => {
   const discoveredCount = discoveredAnimals.length;
   const totalCount = ANIMALS.length;
 
+  const tabs = [
+    { id: 'album', label: '📖 动物图鉴' },
+    { id: 'records', label: '💖 康复故事' },
+  ];
+
   return (
     <div className="flex-1 bg-gradient-to-b from-purple-100 to-indigo-100 p-4 overflow-auto">
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-6">
-          <h2 className="text-3xl font-bold text-purple-700 mb-2">📖 动物图鉴</h2>
-          <p className="text-purple-500">记录你救助过的所有小动物</p>
+          <h2 className="text-3xl font-bold text-purple-700 mb-2">📖 图鉴 & 故事</h2>
+          <p className="text-purple-500">记录你救助过的所有小动物和它们的康复故事</p>
         </div>
 
-        {/* 收集进度 */}
-        <div className="bg-white rounded-xl p-4 mb-6 shadow-md">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="font-bold text-gray-700">🏆 收集进度</h3>
-            <span className="text-sm text-purple-600 font-bold">
-              {discoveredCount} / {totalCount}
-            </span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-4">
-            <div
-              className="bg-gradient-to-r from-purple-500 to-pink-500 h-4 rounded-full transition-all"
-              style={{ width: `${(discoveredCount / totalCount) * 100}%` }}
-            />
-          </div>
-          <p className="text-xs text-gray-500 mt-2 text-center">
-            总声望: ⭐ {reputation}
-          </p>
+        {/* 标签切换 */}
+        <div className="flex gap-2 mb-6 flex-wrap justify-center">
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`px-4 py-2 rounded-full font-medium transition-all ${
+                activeTab === tab.id
+                  ? 'bg-purple-500 text-white shadow-md'
+                  : 'bg-white text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              {tab.label}
+              {tab.id === 'records' && recoveryRecords.length > 0 && (
+                <span className="ml-1 text-xs bg-green-500 text-white px-1.5 py-0.5 rounded-full">
+                  {recoveryRecords.length}
+                </span>
+              )}
+            </button>
+          ))}
         </div>
 
-        {/* 动物网格 */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {sortedAnimals.map(animal => {
-            const discovered = discoveredAnimals.includes(animal.id);
-            
-            return (
-              <div
-                key={animal.id}
-                onClick={() => discovered && setSelectedAnimal(animal)}
-                className={`relative rounded-2xl p-4 transition-all transform hover:scale-105 cursor-pointer ${
-                  discovered
-                    ? `bg-gradient-to-br ${rarityColors[animal.rarity]} shadow-lg`
-                    : 'bg-gray-300 opacity-60'
-                }`}
-              >
-                <div className="text-center">
-                  <div className="text-5xl mb-2">
-                    {discovered ? animal.emoji : '❓'}
-                  </div>
-                  <p className={`font-bold ${discovered ? 'text-white' : 'text-gray-500'}`}>
-                    {discovered ? animal.name : '???'}
-                  </p>
-                  {discovered && (
-                    <span className={`inline-block mt-2 text-xs px-2 py-0.5 rounded-full ${rarityBadgeColors[animal.rarity]}`}>
-                      {rarityLabels[animal.rarity]}
-                    </span>
-                  )}
-                </div>
-                {discovered && animal.rarity === 'legendary' && (
-                  <div className="absolute -top-2 -right-2 text-2xl animate-bounce">
-                    ✨
-                  </div>
-                )}
+        {activeTab === 'album' && (
+          <>
+            {/* 收集进度 */}
+            <div className="bg-white rounded-xl p-4 mb-6 shadow-md">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="font-bold text-gray-700">🏆 收集进度</h3>
+                <span className="text-sm text-purple-600 font-bold">
+                  {discoveredCount} / {totalCount}
+                </span>
               </div>
-            );
-          })}
-        </div>
+              <div className="w-full bg-gray-200 rounded-full h-4">
+                <div
+                  className="bg-gradient-to-r from-purple-500 to-pink-500 h-4 rounded-full transition-all"
+                  style={{ width: `${(discoveredCount / totalCount) * 100}%` }}
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-2 text-center">
+                总声望: ⭐ {reputation}
+              </p>
+            </div>
+
+            {/* 动物网格 */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {sortedAnimals.map(animal => {
+                const discovered = discoveredAnimals.includes(animal.id);
+                
+                return (
+                  <div
+                    key={animal.id}
+                    onClick={() => discovered && setSelectedAnimal(animal)}
+                    className={`relative rounded-2xl p-4 transition-all transform hover:scale-105 cursor-pointer ${
+                      discovered
+                        ? `bg-gradient-to-br ${rarityColors[animal.rarity]} shadow-lg`
+                        : 'bg-gray-300 opacity-60'
+                    }`}
+                  >
+                    <div className="text-center">
+                      <div className="text-5xl mb-2">
+                        {discovered ? animal.emoji : '❓'}
+                      </div>
+                      <p className={`font-bold ${discovered ? 'text-white' : 'text-gray-500'}`}>
+                        {discovered ? animal.name : '???'}
+                      </p>
+                      {discovered && (
+                        <span className={`inline-block mt-2 text-xs px-2 py-0.5 rounded-full ${rarityBadgeColors[animal.rarity]}`}>
+                          {rarityLabels[animal.rarity]}
+                        </span>
+                      )}
+                    </div>
+                    {discovered && animal.rarity === 'legendary' && (
+                      <div className="absolute -top-2 -right-2 text-2xl animate-bounce">
+                        ✨
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        {activeTab === 'records' && (
+          <div>
+            {recoveryRecords.length > 0 ? (
+              <div className="space-y-4">
+                {recoveryRecords.map(record => (
+                  <div key={record.id} className="bg-gradient-to-r from-green-50 to-blue-50 rounded-2xl p-5 border-2 border-green-200 shadow-md">
+                    <div className="flex items-start gap-4 mb-4">
+                      <div className="text-6xl">{record.animalEmoji}</div>
+                      <div className="flex-1">
+                        <h3 className="text-xl font-bold text-gray-800">{record.animalName}</h3>
+                        <div className="flex gap-3 mt-1 flex-wrap">
+                          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                            📅 第 {record.rescueDate} 天救助
+                          </span>
+                          <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                            🌊 第 {record.releaseDate} 天放归
+                          </span>
+                          <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
+                            ⏱️ 共 {record.totalDays} 天
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bg-white rounded-xl p-4 mb-3">
+                      <p className="text-gray-700 italic">"{record.notes}"</p>
+                    </div>
+                    {record.careEvents.length > 0 && (
+                      <div className="mt-3">
+                        <p className="text-xs text-gray-500 mb-2 font-medium">💝 照护互动:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {record.careEvents.map((event, idx) => (
+                            <span key={idx} className="text-xs bg-pink-100 text-pink-700 px-3 py-1 rounded-full">
+                              {event}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="bg-white rounded-xl p-12 text-center shadow-md">
+                <span className="text-6xl">💖</span>
+                <p className="text-gray-500 mt-4">还没有康复故事</p>
+                <p className="text-gray-400 text-sm mt-1">救助并放归动物后，这里会记录每一次温暖的故事~</p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* 动物详情弹窗 */}
         {selectedAnimal && (

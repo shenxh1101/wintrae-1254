@@ -3,7 +3,20 @@ import { useGameStore } from '../store/useGameStore';
 import { Animal, BeachFind } from '../types/game';
 
 export const BeachScene = () => {
-  const { searchBeach, rescueAnimal, collectDriftwood, currentWeather } = useGameStore();
+  const {
+    searchBeach,
+    rescueAnimal,
+    collectDriftwood,
+    addPendingItem,
+    collectPendingItem,
+    discardPendingItem,
+    pendingItems,
+    currentWeather,
+    setScene,
+    getInventoryCount,
+    warehouseCapacity,
+  } = useGameStore();
+
   const [searchResult, setSearchResult] = useState<{
     found: boolean;
     result?: Animal | BeachFind;
@@ -11,6 +24,11 @@ export const BeachScene = () => {
   } | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [message, setMessage] = useState('');
+  const [showWarehouseFull, setShowWarehouseFull] = useState(false);
+  const [pendingItemToCollect, setPendingItemToCollect] = useState<BeachFind | null>(null);
+
+  const currentCount = getInventoryCount();
+  const isWarehouseFull = currentCount >= warehouseCapacity;
 
   const handleSearch = () => {
     if (isSearching) return;
@@ -18,6 +36,7 @@ export const BeachScene = () => {
     setIsSearching(true);
     setSearchResult(null);
     setMessage('');
+    setShowWarehouseFull(false);
 
     if (!currentWeather.canGoOut) {
       setMessage('⛈️ 暴风雨天气，不适合出海巡查哦！');
@@ -48,10 +67,40 @@ export const BeachScene = () => {
   const handleCollect = () => {
     if (searchResult?.type === 'driftwood' && searchResult.result) {
       const item = searchResult.result as BeachFind;
-      collectDriftwood(item);
-      setMessage(`✨ 收集到了 ${item.name}！`);
-      setSearchResult(null);
+      
+      if (item.type !== 'trash' && isWarehouseFull) {
+        addPendingItem(item);
+        setPendingItemToCollect(item);
+        setShowWarehouseFull(true);
+        setSearchResult(null);
+        return;
+      }
+
+      const success = collectDriftwood(item);
+      if (success) {
+        setMessage(`✨ 收集到了 ${item.name}！`);
+        setSearchResult(null);
+      } else {
+        addPendingItem(item);
+        setPendingItemToCollect(item);
+        setShowWarehouseFull(true);
+        setSearchResult(null);
+      }
     }
+  };
+
+  const handleCollectPending = (pendingId: string) => {
+    const success = collectPendingItem(pendingId);
+    if (success) {
+      setMessage('✅ 收集成功！');
+    } else {
+      setMessage('⚠️ 仓库还是满的，先去出售或升级吧！');
+    }
+  };
+
+  const handleDiscardPending = (pendingId: string) => {
+    discardPendingItem(pendingId);
+    setMessage('🗑️ 已放弃这件物品');
   };
 
   return (
@@ -61,6 +110,70 @@ export const BeachScene = () => {
           <h2 className="text-3xl font-bold text-ocean-800 mb-2">🏖️ 海岸巡查</h2>
           <p className="text-ocean-600">在海滩上寻找需要帮助的小动物和漂流物</p>
         </div>
+
+        {/* 仓库满警告 */}
+        {isWarehouseFull && (
+          <div className="bg-red-100 border-2 border-red-300 rounded-xl p-4 mb-4">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">⚠️</span>
+                <div>
+                  <p className="font-bold text-red-700">仓库已满！</p>
+                  <p className="text-sm text-red-600">新收集的物品会进入待处理列表</p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setScene('warehouse')}
+                  className="bg-red-500 text-white px-4 py-2 rounded-full text-sm font-bold hover:bg-red-600 transition-all"
+                >
+                  去仓库处理
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 待处理物品列表 */}
+        {pendingItems.length > 0 && (
+          <div className="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4 mb-4">
+            <h3 className="font-bold text-yellow-800 mb-3 flex items-center gap-2">
+              <span>📦</span> 待处理物品 ({pendingItems.length})
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              {pendingItems.map(pending => (
+                <div
+                  key={pending.id}
+                  className="bg-white rounded-lg p-2 flex items-center gap-2 shadow-sm"
+                >
+                  <span className="text-2xl">{pending.item.emoji}</span>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-700">{pending.item.name}</p>
+                  </div>
+                  <button
+                    onClick={() => handleCollectPending(pending.id)}
+                    className="bg-green-500 text-white px-2 py-1 rounded text-xs font-bold hover:bg-green-600"
+                  >
+                    收集
+                  </button>
+                  <button
+                    onClick={() => handleDiscardPending(pending.id)}
+                    className="bg-gray-400 text-white px-2 py-1 rounded text-xs font-bold hover:bg-gray-500"
+                  >
+                    放弃
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 消息提示 */}
+        {message && (
+          <div className="bg-white/80 backdrop-blur rounded-xl p-4 mb-4 text-center shadow-md">
+            <p className="text-gray-700 font-medium">{message}</p>
+          </div>
+        )}
 
         {/* 海滩场景展示 */}
         <div className="relative bg-gradient-to-b from-ocean-300 to-sand-300 rounded-3xl p-8 mb-6 min-h-[300px] shadow-inner overflow-hidden">
@@ -127,13 +240,6 @@ export const BeachScene = () => {
           </div>
         </div>
 
-        {/* 消息提示 */}
-        {message && (
-          <div className="bg-white/80 backdrop-blur rounded-xl p-4 mb-4 text-center shadow-md">
-            <p className="text-gray-700 font-medium">{message}</p>
-          </div>
-        )}
-
         {/* 搜索按钮 */}
         <div className="text-center">
           <button
@@ -161,8 +267,51 @@ export const BeachScene = () => {
           <div className="mt-2 flex gap-4 text-sm text-gray-600">
             <span>🐾 动物出现: {Math.round(currentWeather.animalSpawnRate * 100)}%</span>
             <span>🪵 漂流物: {Math.round(currentWeather.driftwoodSpawnRate * 100)}%</span>
+            <span>📦 仓库: {currentCount}/{warehouseCapacity}</span>
           </div>
         </div>
+
+        {/* 仓库已满弹窗 */}
+        {showWarehouseFull && pendingItemToCollect && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
+              <div className="text-center">
+                <div className="text-6xl mb-3">📦</div>
+                <h3 className="text-2xl font-bold text-gray-800 mb-2">仓库已满！</h3>
+                <p className="text-gray-600 mb-4">
+                  你发现了 <span className="font-bold">{pendingItemToCollect.emoji} {pendingItemToCollect.name}</span>，
+                  但是仓库已经装不下了。这件物品已加入待处理列表，你可以：
+                </p>
+              </div>
+              <div className="space-y-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowWarehouseFull(false);
+                    setScene('warehouse');
+                  }}
+                  className="w-full py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-xl font-bold hover:from-green-600 hover:to-emerald-600 transition-all"
+                >
+                  💰 去仓库出售物品
+                </button>
+                <button
+                  onClick={() => {
+                    setShowWarehouseFull(false);
+                    setScene('warehouse');
+                  }}
+                  className="w-full py-3 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-xl font-bold hover:from-blue-600 hover:to-indigo-600 transition-all"
+                >
+                  ⬆️ 去仓库升级容量
+                </button>
+                <button
+                  onClick={() => setShowWarehouseFull(false)}
+                  className="w-full py-3 bg-gray-200 text-gray-700 rounded-xl font-bold hover:bg-gray-300 transition-all"
+                >
+                  稍后再说
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

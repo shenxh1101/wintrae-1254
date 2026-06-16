@@ -245,7 +245,9 @@ export const FESTIVALS: FestivalEvent[] = [
     emoji: '🌊',
     description: '一年一度的海洋节！救助动物获得双倍声望',
     duration: 3,
-    effects: ['double_reputation']
+    effects: ['double_reputation'],
+    startDay: 0,
+    remainingDays: 3,
   },
   {
     id: 'gift_day',
@@ -253,7 +255,9 @@ export const FESTIVALS: FestivalEvent[] = [
     emoji: '🎁',
     description: '神秘的礼物日！每天登录获得额外奖励',
     duration: 1,
-    effects: ['daily_gift']
+    effects: ['daily_gift'],
+    startDay: 0,
+    remainingDays: 1,
   },
   {
     id: 'migration',
@@ -261,8 +265,133 @@ export const FESTIVALS: FestivalEvent[] = [
     emoji: '🦅',
     description: '动物迁徙的季节！遇到珍稀动物的概率提升',
     duration: 5,
-    effects: ['rare_animal_boost']
+    effects: ['rare_animal_boost'],
+    startDay: 0,
+    remainingDays: 5,
   },
+];
+
+export const FESTIVAL_TASKS: Record<string, Task[]> = {
+  sea_festival: [
+    {
+      id: 'festival_sea_rescue',
+      title: '海洋节救助先锋',
+      description: '海洋节期间救助 5 只受伤动物',
+      type: 'festival',
+      target: 5,
+      progress: 0,
+      reward: { type: 'coins', amount: 200 },
+      completed: false,
+      claimed: false,
+      festivalId: 'sea_festival',
+    },
+    {
+      id: 'festival_sea_release',
+      title: '海洋节放归大使',
+      description: '海洋节期间放归 3 只康复动物',
+      type: 'festival',
+      target: 3,
+      progress: 0,
+      reward: { type: 'reputation', amount: 100 },
+      completed: false,
+      claimed: false,
+      festivalId: 'sea_festival',
+    },
+  ],
+  gift_day: [
+    {
+      id: 'festival_gift_collect',
+      title: '礼物日大丰收',
+      description: '礼物日当天收集 10 件漂流物',
+      type: 'festival',
+      target: 10,
+      progress: 0,
+      reward: { type: 'coins', amount: 150 },
+      completed: false,
+      claimed: false,
+      festivalId: 'gift_day',
+    },
+  ],
+  migration: [
+    {
+      id: 'festival_migration_rare',
+      title: '迁徙季珍稀守护者',
+      description: '迁徙季期间救助 2 只稀有或以上动物',
+      type: 'festival',
+      target: 2,
+      progress: 0,
+      reward: { type: 'coins', amount: 300 },
+      completed: false,
+      claimed: false,
+      festivalId: 'migration',
+    },
+    {
+      id: 'festival_migration_rescue',
+      title: '迁徙季救助能手',
+      description: '迁徙季期间救助 8 只动物',
+      type: 'festival',
+      target: 8,
+      progress: 0,
+      reward: { type: 'reputation', amount: 80 },
+      completed: false,
+      claimed: false,
+      festivalId: 'migration',
+    },
+  ],
+};
+
+export const CARE_EVENT_TEMPLATES = [
+  {
+    type: 'feed' as const,
+    title: '肚子饿了',
+    description: '小动物肚子饿了，喂它吃点东西吧！',
+    emoji: '🍖',
+    reward: 10,
+  },
+  {
+    type: 'feed' as const,
+    title: '想要零食',
+    description: '小动物眼巴巴地看着你，好像想要好吃的~',
+    emoji: '🐟',
+    reward: 8,
+  },
+  {
+    type: 'clean' as const,
+    title: '需要洗澡',
+    description: '小动物身上有点脏，给它清洁一下吧！',
+    emoji: '🛁',
+    reward: 10,
+  },
+  {
+    type: 'clean' as const,
+    title: '整理毛发',
+    description: '小动物的毛发乱糟糟的，帮它梳理一下吧！',
+    emoji: '✨',
+    reward: 8,
+  },
+  {
+    type: 'play' as const,
+    title: '想要玩耍',
+    description: '小动物看起来很无聊，陪它玩一会儿吧！',
+    emoji: '🎾',
+    reward: 12,
+  },
+  {
+    type: 'play' as const,
+    title: '需要陪伴',
+    description: '小动物有点孤单，坐在它旁边陪陪它吧~',
+    emoji: '🤗',
+    reward: 10,
+  },
+];
+
+export const RECOVERY_NOTES = [
+  '康复过程非常顺利，小家伙每天都很精神！',
+  '刚来时很虚弱，在大家的照顾下慢慢恢复了活力。',
+  '是个很贪吃的小家伙，每次喂食都特别积极！',
+  '喜欢和救助站的其他小伙伴一起玩耍。',
+  '一开始有点怕人，后来变得特别亲人。',
+  '恢复速度比预期的还要快，体质很棒！',
 ];
 
 export const DECORATIONS: Decoration[] = [
