@@ -27,6 +27,20 @@ export interface CareEvent {
   wasPreferred?: boolean;
 }
 
+export type ExplorationRoute = 'nearshore' | 'reef' | 'deepbeach';
+
+export interface BeachRoute {
+  id: ExplorationRoute;
+  name: string;
+  emoji: string;
+  description: string;
+  animalChance: number;
+  driftwoodChance: number;
+  rareBoost: number;
+  costSupplies: { id: string; quantity: number }[];
+  costLabel: string;
+}
+
 export interface RecoveryRecord {
   id: string;
   animalId: string;
@@ -40,6 +54,10 @@ export interface RecoveryRecord {
   preferredCareMatches: number;
   totalDays: number;
   notes: string;
+  treatmentCount: number;
+  coinReward: number;
+  reputationReward: number;
+  explorationRoute?: ExplorationRoute;
 }
 
 export interface RescuedAnimal {
@@ -224,4 +242,6 @@ export interface GameState {
   currentDayLedger: DailyLedger;
   festivalStats: FestivalStats;
   upgradeLevels: UpgradeLevels;
+  treatmentCounts: Record<string, number>;
+  lastRoute: ExplorationRoute;
 }

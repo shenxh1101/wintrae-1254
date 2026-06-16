@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useGameStore } from '../store/useGameStore';
-import { Animal, BeachFind } from '../types/game';
+import { Animal, BeachFind, ExplorationRoute } from '../types/game';
+import { BEACH_ROUTES, EXPLORATION_BOOSTS } from '../data/gameData';
 
 export const BeachScene = () => {
   const {
@@ -15,6 +16,9 @@ export const BeachScene = () => {
     setScene,
     getInventoryCount,
     warehouseCapacity,
+    canAffordRoute,
+    useItem,
+    getUpgradeLevel,
   } = useGameStore();
 
   const [searchResult, setSearchResult] = useState<{
@@ -26,13 +30,15 @@ export const BeachScene = () => {
   const [message, setMessage] = useState('');
   const [showWarehouseFull, setShowWarehouseFull] = useState(false);
   const [pendingItemToCollect, setPendingItemToCollect] = useState<BeachFind | null>(null);
+  const [selectedRoute, setSelectedRoute] = useState<ExplorationRoute>('nearshore');
 
   const currentCount = getInventoryCount();
   const isWarehouseFull = currentCount >= warehouseCapacity;
+  const explorationLevel = getUpgradeLevel('exploration');
 
   const handleSearch = () => {
     if (isSearching) return;
-    
+
     setIsSearching(true);
     setSearchResult(null);
     setMessage('');
@@ -44,8 +50,25 @@ export const BeachScene = () => {
       return;
     }
 
+    const routeData = BEACH_ROUTES.find(r => r.id === selectedRoute);
+    if (routeData && routeData.costSupplies.length > 0) {
+      if (!canAffordRoute(selectedRoute)) {
+        setMessage(`⚠️ 物资不足！需要 ${routeData.costLabel} 才能前往此路线`);
+        setIsSearching(false);
+        return;
+      }
+      for (const cost of routeData.costSupplies) {
+        const success = useItem(cost.id, cost.quantity);
+        if (!success) {
+          setMessage('⚠️ 物资消耗失败，请重试');
+          setIsSearching(false);
+          return;
+        }
+      }
+    }
+
     setTimeout(() => {
-      const result = searchBeach();
+      const result = searchBeach(selectedRoute);
       setSearchResult(result);
       setIsSearching(false);
 
@@ -67,7 +90,7 @@ export const BeachScene = () => {
   const handleCollect = () => {
     if (searchResult?.type === 'driftwood' && searchResult.result) {
       const item = searchResult.result as BeachFind;
-      
+
       if (item.type !== 'trash' && isWarehouseFull) {
         addPendingItem(item);
         setPendingItemToCollect(item);
@@ -103,6 +126,10 @@ export const BeachScene = () => {
     setMessage('🗑️ 已放弃这件物品');
   };
 
+  const explorationBoostPercent = explorationLevel > 0
+    ? Math.round((EXPLORATION_BOOSTS.animal[explorationLevel - 1] - 1) * 100)
+    : 0;
+
   return (
     <div className="flex-1 bg-gradient-to-b from-sky-300 via-ocean-200 to-sand-200 p-4 overflow-auto">
       <div className="max-w-4xl mx-auto">
@@ -111,7 +138,6 @@ export const BeachScene = () => {
           <p className="text-ocean-600">在海滩上寻找需要帮助的小动物和漂流物</p>
         </div>
 
-        {/* 仓库满警告 */}
         {isWarehouseFull && (
           <div className="bg-red-100 border-2 border-red-300 rounded-xl p-4 mb-4">
             <div className="flex items-center justify-between flex-wrap gap-2">
@@ -134,7 +160,6 @@ export const BeachScene = () => {
           </div>
         )}
 
-        {/* 待处理物品列表 */}
         {pendingItems.length > 0 && (
           <div className="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4 mb-4">
             <h3 className="font-bold text-yellow-800 mb-3 flex items-center gap-2">
@@ -168,34 +193,28 @@ export const BeachScene = () => {
           </div>
         )}
 
-        {/* 消息提示 */}
         {message && (
           <div className="bg-white/80 backdrop-blur rounded-xl p-4 mb-4 text-center shadow-md">
             <p className="text-gray-700 font-medium">{message}</p>
           </div>
         )}
 
-        {/* 海滩场景展示 */}
         <div className="relative bg-gradient-to-b from-ocean-300 to-sand-300 rounded-3xl p-8 mb-6 min-h-[300px] shadow-inner overflow-hidden">
-          {/* 太阳/云 */}
           <div className="absolute top-4 right-8 text-6xl animate-bounce-slow">
             {currentWeather.emoji}
           </div>
-          
-          {/* 海浪 */}
+
           <div className="absolute bottom-20 left-0 right-0">
             <div className="text-4xl text-ocean-500/50">
               🌊🌊🌊🌊🌊🌊🌊🌊🌊🌊
             </div>
           </div>
 
-          {/* 沙滩装饰 */}
           <div className="absolute bottom-4 left-8 text-3xl">🐚</div>
           <div className="absolute bottom-8 left-24 text-2xl">🦀</div>
           <div className="absolute bottom-6 right-16 text-3xl">🌴</div>
           <div className="absolute bottom-4 right-32 text-2xl">🪨</div>
 
-          {/* 搜索结果 */}
           <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
             {isSearching ? (
               <div className="text-center">
@@ -209,8 +228,8 @@ export const BeachScene = () => {
                   {(searchResult.result as Animal).name || (searchResult.result as BeachFind).name}
                 </h3>
                 <p className="text-gray-600 text-sm mb-4">
-                  {searchResult.type === 'animal' 
-                    ? '这只小动物受伤了，需要帮助！' 
+                  {searchResult.type === 'animal'
+                    ? '这只小动物受伤了，需要帮助！'
                     : (searchResult.result as BeachFind).type === 'trash'
                       ? '清理一下吧~'
                       : '可以收起来哦！'}
@@ -234,13 +253,62 @@ export const BeachScene = () => {
             ) : (
               <div className="text-center text-ocean-600/60">
                 <div className="text-5xl mb-2">👀</div>
-                <p>点击下方按钮开始巡查</p>
+                <p>选择路线后开始巡查</p>
               </div>
             )}
           </div>
         </div>
 
-        {/* 搜索按钮 */}
+        <div className="mb-6">
+          <h3 className="font-bold text-ocean-800 mb-3 text-center">🗺️ 选择巡查路线</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {BEACH_ROUTES.map(route => {
+              const isSelected = selectedRoute === route.id;
+              const affordable = canAffordRoute(route.id);
+              const disabled = !affordable;
+
+              return (
+                <button
+                  key={route.id}
+                  onClick={() => !disabled && setSelectedRoute(route.id)}
+                  disabled={disabled}
+                  className={`relative text-left rounded-xl p-4 transition-all border-2 ${
+                    isSelected
+                      ? 'border-ocean-500 bg-ocean-50 shadow-md scale-[1.02]'
+                      : disabled
+                        ? 'border-gray-200 bg-gray-100 opacity-60 cursor-not-allowed'
+                        : 'border-gray-200 bg-white/80 hover:border-ocean-300 hover:bg-ocean-50/50'
+                  }`}
+                >
+                  {explorationLevel > 0 && isSelected && (
+                    <span className="absolute -top-2 -right-2 bg-amber-400 text-amber-900 text-xs font-bold px-2 py-0.5 rounded-full shadow">
+                      探索+{explorationBoostPercent}%
+                    </span>
+                  )}
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-2xl">{route.emoji}</span>
+                    <span className="font-bold text-gray-800">{route.name}</span>
+                  </div>
+                  <p className="text-xs text-gray-500 mb-2">{route.description}</p>
+                  <div className="flex gap-3 text-xs text-gray-600 mb-2">
+                    <span>🐾 {Math.round(route.animalChance * 100)}%</span>
+                    <span>🪵 {Math.round(route.driftwoodChance * 100)}%</span>
+                  </div>
+                  <div className={`text-xs font-medium ${
+                    route.costSupplies.length === 0
+                      ? 'text-green-600'
+                      : affordable
+                        ? 'text-ocean-600'
+                        : 'text-red-500'
+                  }`}>
+                    {route.costSupplies.length === 0 ? '✅ 免费' : `💰 ${route.costLabel}`}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         <div className="text-center">
           <button
             onClick={handleSearch}
@@ -251,7 +319,7 @@ export const BeachScene = () => {
                 : 'bg-gray-400 text-gray-200 cursor-not-allowed'
             }`}
           >
-            {isSearching ? '🔍 搜索中...' : '🚶 开始巡查海滩'}
+            {isSearching ? '🔍 搜索中...' : '🚶 开始巡查'}
           </button>
           {!currentWeather.canGoOut && (
             <p className="mt-2 text-red-500 font-medium">
@@ -260,7 +328,6 @@ export const BeachScene = () => {
           )}
         </div>
 
-        {/* 天气提示 */}
         <div className="mt-6 bg-white/60 backdrop-blur rounded-xl p-4">
           <h3 className="font-bold text-gray-700 mb-2">📌 小提示</h3>
           <p className="text-gray-600 text-sm">{currentWeather.description}</p>
@@ -271,7 +338,6 @@ export const BeachScene = () => {
           </div>
         </div>
 
-        {/* 仓库已满弹窗 */}
         {showWarehouseFull && pendingItemToCollect && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">

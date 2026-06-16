@@ -1,6 +1,15 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useGameStore } from '../store/useGameStore';
-import { WAREHOUSE_LEVELS, DECORATIONS, INITIAL_INVENTORY, STATION_LEVELS, UPGRADE_PATHS } from '../data/gameData';
+import {
+  WAREHOUSE_LEVELS,
+  DECORATIONS,
+  INITIAL_INVENTORY,
+  STATION_LEVELS,
+  UPGRADE_PATHS,
+  ANIMAL_CATEGORIES,
+  getWeekReport,
+  getMonthReport,
+} from '../data/gameData';
 
 const SHOP_ITEMS = [
   { id: 'bandage', name: '绷带', emoji: '🩹', price: 10, description: '用于包扎伤口' },
@@ -40,9 +49,13 @@ export const WarehouseScene = () => {
     reputation,
     upgradePath,
     getUpgradeLevel,
+    day,
+    dailyLedgers,
+    recoveryRecords,
   } = useGameStore();
   const [activeTab, setActiveTab] = useState<'items' | 'shop' | 'upgrade' | 'decorate' | 'ledger'>('items');
   const [message, setMessage] = useState('');
+  const [reportPeriod, setReportPeriod] = useState<'today' | 'week' | 'month'>('today');
 
   const currentCount = getInventoryCount();
   const nextLevel = WAREHOUSE_LEVELS.find(l => l.level === warehouseLevel + 1);
@@ -50,6 +63,98 @@ export const WarehouseScene = () => {
   const nextStationLevel = getNextStationLevel();
   const currentLedger = getCurrentLedger();
   const recentLedgers = getRecentLedgers(7);
+
+  const reportData = useMemo(() => {
+    if (reportPeriod === 'week') return getWeekReport(dailyLedgers, day, currentLedger);
+    if (reportPeriod === 'month') return getMonthReport(dailyLedgers, day, currentLedger);
+    return {
+      days: 1,
+      coinsEarned: currentLedger.coinsEarned,
+      coinsSpent: currentLedger.coinsSpent,
+      reputationEarned: currentLedger.reputationEarned,
+      animalsRescued: currentLedger.animalsRescued,
+      animalsReleased: currentLedger.animalsReleased,
+      itemsCollected: currentLedger.itemsCollected,
+      itemsSold: currentLedger.itemsSold,
+    };
+  }, [reportPeriod, dailyLedgers, day, currentLedger]);
+
+  const trendData = useMemo(() => {
+    const allLedgers = [...dailyLedgers].slice(-7);
+    if (allLedgers.length === 0) return [];
+    return allLedgers.map(l => ({
+      day: l.day,
+      net: l.coinsEarned - l.coinsSpent,
+    }));
+  }, [dailyLedgers]);
+
+  const categoryStats = useMemo(() => {
+    const stats: Record<string, { count: number; coins: number; reputation: number }> = {};
+    for (const record of recoveryRecords) {
+      const cat = ANIMAL_CATEGORIES[record.animalId] || '其他';
+      if (!stats[cat]) stats[cat] = { count: 0, coins: 0, reputation: 0 };
+      stats[cat].count += 1;
+      stats[cat].coins += record.coinReward;
+      stats[cat].reputation += record.reputationReward;
+    }
+    return stats;
+  }, [recoveryRecords]);
+
+  const topCategory = useMemo(() => {
+    let max = 0;
+    let top = '';
+    for (const [cat, s] of Object.entries(categoryStats)) {
+      if (s.count > max) { max = s.count; top = cat; }
+    }
+    return top;
+  }, [categoryStats]);
+
+  const upgradeCostBenefit = useMemo(() => {
+    const result: Record<string, { totalCoinsSpent: number; totalRepSpent: number; benefitText: string; rating: number }> = {};
+    for (const upgrade of UPGRADE_PATHS) {
+      const pathId = upgrade.id as 'medical' | 'recovery' | 'exploration';
+      const currentLevel = getUpgradeLevel(pathId);
+      let totalCoins = 0;
+      let totalRep = 0;
+      for (let i = 0; i < currentLevel; i++) {
+        const cost = upgrade.costs[i];
+        if (cost) {
+          totalCoins += cost.coins;
+          if (cost.reputation) totalRep += cost.reputation;
+        }
+      }
+
+      let benefitText = '';
+      let rating = 0;
+
+      if (pathId === 'medical') {
+        const totalTreatments = Object.values(useGameStore.getState().treatmentCounts).reduce((s: number, v) => s + (v as number), 0);
+        const savedTreatments = currentLevel > 0 ? Math.floor(totalTreatments * (currentLevel * 0.2) / (1 + currentLevel * 0.2)) : 0;
+        benefitText = savedTreatments > 0 ? `已节省 ${savedTreatments} 次治疗` : '尚无节省记录';
+        rating = totalTreatments > 0 ? Math.min(5, Math.ceil((savedTreatments / Math.max(totalTreatments, 1)) * 5)) : (currentLevel > 0 ? 2 : 0);
+      } else if (pathId === 'recovery') {
+        const totalDaysSaved = recoveryRecords.reduce((sum, r) => {
+          const baseDays = r.totalDays / (1 + currentLevel * 0.15);
+          return sum + Math.max(0, Math.round(r.totalDays - baseDays));
+        }, 0);
+        benefitText = totalDaysSaved > 0 ? `已加速 ${totalDaysSaved} 天康复` : '尚无加速记录';
+        rating = recoveryRecords.length > 0 ? Math.min(5, Math.ceil((totalDaysSaved / Math.max(recoveryRecords.length, 1)) * 3)) : (currentLevel > 0 ? 2 : 0);
+      } else if (pathId === 'exploration') {
+        const boostPct = currentLevel > 0 ? [15, 35, 50][currentLevel - 1] : 0;
+        benefitText = boostPct > 0 ? `已提升 ${boostPct}% 发现率` : '尚无提升';
+        const foundCount = recoveryRecords.length;
+        rating = foundCount > 3 ? Math.min(5, currentLevel + 1) : (currentLevel > 0 ? 2 : 0);
+      }
+
+      result[upgrade.id] = {
+        totalCoinsSpent: totalCoins,
+        totalRepSpent: totalRep,
+        benefitText,
+        rating: Math.max(1, Math.min(5, rating)),
+      };
+    }
+    return result;
+  }, [recoveryRecords, getUpgradeLevel]);
 
   const showMessage = (msg: string) => {
     setMessage(msg);
@@ -139,7 +244,8 @@ export const WarehouseScene = () => {
     { id: 'ledger', label: '📊 账本' },
   ];
 
-  const netCoins = currentLedger.coinsEarned - currentLedger.coinsSpent;
+  const reportNetCoins = reportData.coinsEarned - reportData.coinsSpent;
+  const periodLabel = reportPeriod === 'today' ? '今日' : reportPeriod === 'week' ? '近7天' : '近30天';
 
   return (
     <div className="flex-1 bg-gradient-to-b from-amber-100 to-orange-100 p-4 overflow-auto">
@@ -437,6 +543,7 @@ export const WarehouseScene = () => {
                   const isMaxLevel = currentLevel >= upgrade.maxLevel;
                   const nextCost = !isMaxLevel ? upgrade.costs[currentLevel] : null;
                   const canAfford = nextCost ? coins >= nextCost.coins && (!nextCost.reputation || reputation >= nextCost.reputation) : false;
+                  const cb = upgradeCostBenefit[upgrade.id];
                   return (
                     <div key={upgrade.id} className={`rounded-xl p-4 border transition-all ${
                       currentLevel > 0 
@@ -471,6 +578,25 @@ export const WarehouseScene = () => {
                           </div>
                         ))}
                       </div>
+
+                      {/* 成本效益分析 */}
+                      {currentLevel > 0 && cb && (
+                        <div className="bg-white/60 rounded-lg p-2 mb-3 text-xs space-y-1">
+                          <div className="flex justify-between text-gray-600">
+                            <span>累计投入</span>
+                            <span className="font-bold">🪙{cb.totalCoinsSpent} {cb.totalRepSpent > 0 ? `⭐${cb.totalRepSpent}` : ''}</span>
+                          </div>
+                          <div className="flex justify-between text-gray-600">
+                            <span>效果</span>
+                            <span className="font-bold text-emerald-600">{cb.benefitText}</span>
+                          </div>
+                          <div className="flex justify-between text-gray-600">
+                            <span>性价比</span>
+                            <span>{'⭐'.repeat(cb.rating)}{'☆'.repeat(5 - cb.rating)}</span>
+                          </div>
+                        </div>
+                      )}
+
                       {isMaxLevel ? (
                         <div className="text-center py-2 bg-purple-200 rounded-lg">
                           <span className="text-sm font-bold text-purple-700">✨ 已满级</span>
@@ -558,48 +684,94 @@ export const WarehouseScene = () => {
         {/* 账本面板 */}
         {activeTab === 'ledger' && (
           <div className="space-y-4">
-            {/* 今日账本 */}
+            {/* 报告周期切换 */}
+            <div className="flex gap-2 justify-center">
+              {([
+                { id: 'today', label: '今日' },
+                { id: 'week', label: '周报' },
+                { id: 'month', label: '月报' },
+              ] as const).map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => setReportPeriod(p.id)}
+                  className={`px-5 py-2 rounded-full font-medium transition-all text-sm ${
+                    reportPeriod === p.id
+                      ? 'bg-blue-500 text-white shadow-md'
+                      : 'bg-white text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+
+            {/* 报告统计 */}
             <div className="bg-white rounded-xl p-4 shadow-md">
-              <h3 className="font-bold text-lg text-blue-700 mb-4">📊 今日收支 (第 {currentLedger.day} 天)</h3>
+              <h3 className="font-bold text-lg text-blue-700 mb-4">📊 {periodLabel}收支{reportPeriod !== 'today' ? ` (近 ${reportData.days} 天)` : ` (第 ${day} 天)`}</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="bg-green-50 rounded-lg p-3 text-center">
                   <p className="text-xs text-gray-500">收入金币</p>
-                  <p className="text-xl font-bold text-green-600">+{currentLedger.coinsEarned}</p>
+                  <p className="text-xl font-bold text-green-600">+{reportData.coinsEarned}</p>
                 </div>
                 <div className="bg-red-50 rounded-lg p-3 text-center">
                   <p className="text-xs text-gray-500">支出金币</p>
-                  <p className="text-xl font-bold text-red-600">-{currentLedger.coinsSpent}</p>
+                  <p className="text-xl font-bold text-red-600">-{reportData.coinsSpent}</p>
                 </div>
-                <div className={`rounded-lg p-3 text-center ${netCoins >= 0 ? 'bg-blue-50' : 'bg-orange-50'}`}>
-                  <p className="text-xs text-gray-500">今日净收入</p>
-                  <p className={`text-xl font-bold ${netCoins >= 0 ? 'text-blue-600' : 'text-orange-600'}`}>
-                    {netCoins >= 0 ? '+' : ''}{netCoins}
+                <div className={`rounded-lg p-3 text-center ${reportNetCoins >= 0 ? 'bg-blue-50' : 'bg-orange-50'}`}>
+                  <p className="text-xs text-gray-500">{periodLabel}净收入</p>
+                  <p className={`text-xl font-bold ${reportNetCoins >= 0 ? 'text-blue-600' : 'text-orange-600'}`}>
+                    {reportNetCoins >= 0 ? '+' : ''}{reportNetCoins}
                   </p>
                 </div>
                 <div className="bg-purple-50 rounded-lg p-3 text-center">
                   <p className="text-xs text-gray-500">获得声望</p>
-                  <p className="text-xl font-bold text-purple-600">+{currentLedger.reputationEarned}</p>
+                  <p className="text-xl font-bold text-purple-600">+{reportData.reputationEarned}</p>
                 </div>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
                 <div className="bg-pink-50 rounded-lg p-3 text-center">
                   <p className="text-xs text-gray-500">救助动物</p>
-                  <p className="text-xl font-bold text-pink-600">{currentLedger.animalsRescued}</p>
+                  <p className="text-xl font-bold text-pink-600">{reportData.animalsRescued}</p>
                 </div>
                 <div className="bg-emerald-50 rounded-lg p-3 text-center">
                   <p className="text-xs text-gray-500">放归动物</p>
-                  <p className="text-xl font-bold text-emerald-600">{currentLedger.animalsReleased}</p>
+                  <p className="text-xl font-bold text-emerald-600">{reportData.animalsReleased}</p>
                 </div>
                 <div className="bg-cyan-50 rounded-lg p-3 text-center">
                   <p className="text-xs text-gray-500">收集物品</p>
-                  <p className="text-xl font-bold text-cyan-600">{currentLedger.itemsCollected}</p>
+                  <p className="text-xl font-bold text-cyan-600">{reportData.itemsCollected}</p>
                 </div>
                 <div className="bg-amber-50 rounded-lg p-3 text-center">
                   <p className="text-xs text-gray-500">出售物品</p>
-                  <p className="text-xl font-bold text-amber-600">{currentLedger.itemsSold}</p>
+                  <p className="text-xl font-bold text-amber-600">{reportData.itemsSold}</p>
                 </div>
               </div>
             </div>
+
+            {/* 净收入趋势图 */}
+            {trendData.length > 0 && (
+              <div className="bg-white rounded-xl p-4 shadow-md">
+                <h3 className="font-bold text-lg text-gray-700 mb-4">📈 净收入趋势 (近7天)</h3>
+                <div className="flex items-end justify-around gap-2" style={{ height: 120 }}>
+                  {trendData.map(t => {
+                    const maxAbs = Math.max(...trendData.map(d => Math.abs(d.net)), 1);
+                    const barHeight = Math.max(Math.abs(t.net) / maxAbs * 100, 2);
+                    return (
+                      <div key={t.day} className="flex flex-col items-center flex-1">
+                        <span className={`text-xs font-bold mb-1 ${t.net >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                          {t.net >= 0 ? '+' : ''}{t.net}
+                        </span>
+                        <div
+                          className={`w-full max-w-[40px] rounded-t-sm ${t.net >= 0 ? 'bg-green-400' : 'bg-red-400'}`}
+                          style={{ height: barHeight }}
+                        />
+                        <span className="text-xs text-gray-500 mt-1">D{t.day}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* 历史账本 */}
             {recentLedgers.length > 0 && (
@@ -636,6 +808,37 @@ export const WarehouseScene = () => {
                 <span className="text-5xl">📊</span>
                 <p className="text-gray-500 mt-4">还没有历史记录</p>
                 <p className="text-gray-400 text-sm mt-1">多玩几天，这里会显示你的经营记录~</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 动物类别统计 */}
+        {activeTab === 'ledger' && (
+          <div className="mt-4 bg-white rounded-xl p-4 shadow-md">
+            <h3 className="font-bold text-lg text-teal-700 mb-4">🐾 动物类别统计</h3>
+            {Object.keys(categoryStats).length === 0 ? (
+              <p className="text-gray-400 text-center py-4">暂无救助记录</p>
+            ) : (
+              <div className="space-y-3">
+                {Object.entries(categoryStats).map(([cat, stats]) => (
+                  <div
+                    key={cat}
+                    className={`p-3 rounded-lg flex items-center justify-between ${
+                      cat === topCategory ? 'bg-teal-50 border-2 border-teal-300' : 'bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      {cat === topCategory && <span className="text-sm">👑</span>}
+                      <span className="font-bold text-gray-700">{cat}</span>
+                      <span className="text-xs text-gray-500">救助 {stats.count} 只</span>
+                    </div>
+                    <div className="flex gap-4 text-xs">
+                      <span className="text-amber-600 font-bold">🪙 {stats.coins}</span>
+                      <span className="text-purple-600 font-bold">⭐ {stats.reputation}</span>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>

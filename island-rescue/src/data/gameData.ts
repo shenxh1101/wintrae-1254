@@ -10,6 +10,7 @@ import {
   StationLevel,
   UpgradePath,
   DailyLedger,
+  BeachRoute,
 } from '../types/game';
 
 export const PERSONALITY_LABELS: Record<string, string> = {
@@ -583,3 +584,134 @@ export const createEmptyLedger = (day: number): DailyLedger => ({
   itemsCollected: 0,
   itemsSold: 0,
 });
+
+export const BEACH_ROUTES: BeachRoute[] = [
+  {
+    id: 'nearshore',
+    name: '近岸浅滩',
+    emoji: '🏖️',
+    description: '安全温和的浅水区，适合新手探索',
+    animalChance: 0.45,
+    driftwoodChance: 0.4,
+    rareBoost: 0.8,
+    costSupplies: [],
+    costLabel: '免费',
+  },
+  {
+    id: 'reef',
+    name: '珊瑚礁石',
+    emoji: '🪸',
+    description: '礁石区域，常见珍稀物种但需要消耗毛巾',
+    animalChance: 0.55,
+    driftwoodChance: 0.3,
+    rareBoost: 1.5,
+    costSupplies: [{ id: 'towel', quantity: 1 }],
+    costLabel: '毛巾×1',
+  },
+  {
+    id: 'deepbeach',
+    name: '远滩深水',
+    emoji: '🌊',
+    description: '深海区域，稀有动物出没但需要鱼食引诱',
+    animalChance: 0.35,
+    driftwoodChance: 0.25,
+    rareBoost: 2.5,
+    costSupplies: [{ id: 'food', quantity: 1 }],
+    costLabel: '鱼食×1',
+  },
+];
+
+export const ANIMAL_CATEGORIES: Record<string, string> = {
+  seagull: '鸟类', turtle: '爬行类', seal: '哺乳类', penguin: '鸟类',
+  dolphin: '哺乳类', octopus: '软体类', whale: '哺乳类', crab: '甲壳类',
+  jellyfish: '腔肠类', starfish: '棘皮类', shrimp: '甲壳类', seahorse: '鱼类',
+};
+
+export const generateRecoveryStory = (
+  animalName: string,
+  personality: string,
+  preferredCare: string,
+  treatmentCount: number,
+  totalDays: number,
+  preferredMatches: number,
+  coinReward: number,
+  reputationReward: number,
+): string => {
+  const parts: string[] = [];
+
+  if (totalDays <= 2) {
+    parts.push(`${animalName}来得急去得也快，短短${totalDays}天就恢复了健康。`);
+  } else if (totalDays <= 5) {
+    parts.push(`${animalName}在救助站住了${totalDays}天，每一天都在慢慢好转。`);
+  } else if (totalDays <= 10) {
+    parts.push(`${animalName}的康复之路走了${totalDays}天，过程虽然漫长但从未放弃。`);
+  } else {
+    parts.push(`${animalName}经历了漫长的${totalDays}天康复，终于重新回到了大海的怀抱。`);
+  }
+
+  if (personality === '胆小') {
+    parts.push('刚来的时候总是躲在角落里，但随着照护越来越贴心，它慢慢敞开了心扉。');
+  } else if (personality === '贪吃') {
+    parts.push('每次喂食的时候都是最开心的，吃饱了就有力气恢复啦！');
+  } else if (personality === '爱玩') {
+    parts.push('最喜欢有人陪着玩耍，一玩起来就忘了伤痛。');
+  } else if (personality === '温顺') {
+    parts.push('特别乖巧听话，每次照护都非常配合。');
+  } else if (personality === '好奇') {
+    parts.push('对救助站的一切都充满好奇，东看看西摸摸，恢复得也特别快。');
+  }
+
+  if (treatmentCount === 1) {
+    parts.push('经过一次仔细的治疗，伤势就有了明显好转。');
+  } else if (treatmentCount >= 3) {
+    parts.push(`经过${treatmentCount}次耐心的治疗，终于看到了康复的曙光。`);
+  }
+
+  if (preferredMatches >= 3) {
+    parts.push(`照护时${preferredMatches}次匹配了它的${preferredCare}偏好，每次都让它精神焕发！`);
+  } else if (preferredMatches >= 1) {
+    parts.push(`${preferredMatches}次偏好照护让恢复事半功倍。`);
+  }
+
+  if (coinReward >= 30) {
+    parts.push(`放归时获得了${coinReward}金币和${reputationReward}声望的丰厚回报！`);
+  }
+
+  return parts.join('');
+};
+
+export const getWeekReport = (ledgers: DailyLedger[], currentDay: number, currentLedger: DailyLedger) => {
+  const startDay = Math.max(1, currentDay - 6);
+  const weekLedgers = [
+    ...ledgers.filter(l => l.day >= startDay),
+    { ...currentLedger, day: currentDay },
+  ];
+  return {
+    days: weekLedgers.length,
+    coinsEarned: weekLedgers.reduce((s, l) => s + l.coinsEarned, 0),
+    coinsSpent: weekLedgers.reduce((s, l) => s + l.coinsSpent, 0),
+    reputationEarned: weekLedgers.reduce((s, l) => s + l.reputationEarned, 0),
+    animalsRescued: weekLedgers.reduce((s, l) => s + l.animalsRescued, 0),
+    animalsReleased: weekLedgers.reduce((s, l) => s + l.animalsReleased, 0),
+    itemsCollected: weekLedgers.reduce((s, l) => s + l.itemsCollected, 0),
+    itemsSold: weekLedgers.reduce((s, l) => s + l.itemsSold, 0),
+  };
+};
+
+export const getMonthReport = (ledgers: DailyLedger[], currentDay: number, currentLedger: DailyLedger) => {
+  const startDay = Math.max(1, currentDay - 29);
+  const monthLedgers = [
+    ...ledgers.filter(l => l.day >= startDay),
+    { ...currentLedger, day: currentDay },
+  ];
+  return {
+    days: monthLedgers.length,
+    coinsEarned: monthLedgers.reduce((s, l) => s + l.coinsEarned, 0),
+    coinsSpent: monthLedgers.reduce((s, l) => s + l.coinsSpent, 0),
+    reputationEarned: monthLedgers.reduce((s, l) => s + l.reputationEarned, 0),
+    animalsRescued: monthLedgers.reduce((s, l) => s + l.animalsRescued, 0),
+    animalsReleased: monthLedgers.reduce((s, l) => s + l.animalsReleased, 0),
+    itemsCollected: monthLedgers.reduce((s, l) => s + l.itemsCollected, 0),
+    itemsSold: monthLedgers.reduce((s, l) => s + l.itemsSold, 0),
+  };
+};

@@ -2,13 +2,29 @@ import { app, BrowserWindow, Menu } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
+import { execSync } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const isPackaged = app.isPackaged;
 const distPath = path.join(__dirname, '../dist/index.html');
-const hasDist = fs.existsSync(distPath);
+
+function ensureDist() {
+  if (isPackaged) return;
+  if (fs.existsSync(distPath)) return;
+  console.log('[海岛救助站] 首次运行，正在准备游戏资源...');
+  try {
+    execSync('npm run build', {
+      cwd: path.join(__dirname, '..'),
+      stdio: 'inherit',
+      shell: true,
+    });
+    console.log('[海岛救助站] 游戏资源准备完成！');
+  } catch (e) {
+    console.error('[海岛救助站] 资源准备失败，尝试连接开发服务器...');
+  }
+}
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
@@ -27,9 +43,7 @@ function createWindow() {
     icon: path.join(__dirname, 'icon.png'),
   });
 
-  if (isPackaged) {
-    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
-  } else if (hasDist) {
+  if (isPackaged || fs.existsSync(distPath)) {
     mainWindow.loadFile(distPath);
   } else {
     mainWindow.loadURL('http://localhost:3000');
@@ -130,6 +144,8 @@ function createWindow() {
   const menu = Menu.buildFromTemplate(template);
   Menu.setApplicationMenu(menu);
 }
+
+ensureDist();
 
 app.whenReady().then(() => {
   createWindow();

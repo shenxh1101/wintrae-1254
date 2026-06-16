@@ -13,6 +13,7 @@ import {
   DailyLedger,
   StationLevel,
   CareEventType,
+  ExplorationRoute,
 } from '../types/game';
 import {
   ANIMALS,
@@ -26,7 +27,6 @@ import {
   DECORATIONS,
   FESTIVAL_TASKS,
   CARE_EVENT_TEMPLATES,
-  RECOVERY_NOTES,
   STATION_LEVELS,
   createEmptyLedger,
   CARE_TYPE_LABELS,
@@ -34,6 +34,8 @@ import {
   MEDICAL_BOOSTS,
   RECOVERY_BOOSTS,
   EXPLORATION_BOOSTS,
+  BEACH_ROUTES,
+  generateRecoveryStory,
 } from '../data/gameData';
 
 interface FestivalStats {
@@ -50,7 +52,7 @@ interface FestivalStats {
 
 interface GameStore extends GameState {
   setScene: (scene: SceneType) => void;
-  searchBeach: () => { found: boolean; result?: BeachFind | Animal; type?: 'animal' | 'driftwood' };
+  searchBeach: (route?: ExplorationRoute) => { found: boolean; result?: BeachFind | Animal; type?: 'animal' | 'driftwood' };
   rescueAnimal: (animalId: string) => void;
   treatAnimal: (rescuedId: string) => void;
   assignToCareSlot: (rescuedId: string, slotId: string) => void;
@@ -85,6 +87,8 @@ interface GameStore extends GameState {
   upgradePath: (pathId: 'medical' | 'recovery' | 'exploration') => boolean;
   getUpgradeLevel: (pathId: 'medical' | 'recovery' | 'exploration') => number;
   canCompleteCareEvent: (type: CareEventType) => boolean;
+  canAffordRoute: (routeId: ExplorationRoute) => boolean;
+  getAnimalRecords: (animalId: string) => RecoveryRecord[];
 }
 
 const getRandomWeather = () => {
@@ -179,6 +183,8 @@ export const useGameStore = create<GameStore>()(
       currentDayLedger: createEmptyLedger(1),
       festivalStats: initialFestivalStats,
       upgradeLevels: { medical: 0, recovery: 0, exploration: 0 },
+      treatmentCounts: {},
+      lastRoute: 'nearshore',
 
       setScene: (scene) => set({ currentScene: scene }),
 
@@ -204,7 +210,7 @@ export const useGameStore = create<GameStore>()(
         return false;
       },
 
-      searchBeach: () => {
+      searchBeach: (route) => {
         const state = get();
         const weather = state.currentWeather;
         const hasRareBoost = state.activeFestival?.effects.includes('rare_animal_boost');
@@ -213,11 +219,18 @@ export const useGameStore = create<GameStore>()(
         const driftwoodBoost = explLevel > 0 ? EXPLORATION_BOOSTS.driftwood[explLevel - 1] : 1;
         const rareBoost = explLevel > 0 ? EXPLORATION_BOOSTS.rare[explLevel - 1] : 1;
 
-        const animalChance = 0.4 * weather.animalSpawnRate * animalBoost;
-        const driftwoodChance = 0.4 * weather.driftwoodSpawnRate * driftwoodBoost;
+        const routeData = BEACH_ROUTES.find(r => r.id === (route || 'nearshore'));
+        const routeAnimalChance = routeData ? routeData.animalChance : 0.45;
+        const routeDriftwoodChance = routeData ? routeData.driftwoodChance : 0.4;
+        const routeRareBoost = routeData ? routeData.rareBoost : 1;
+
+        set({ lastRoute: route || 'nearshore' });
+
+        const animalChance = routeAnimalChance * weather.animalSpawnRate * animalBoost;
+        const driftwoodChance = routeDriftwoodChance * weather.driftwoodSpawnRate * driftwoodBoost;
         const random = Math.random();
         if (random < animalChance) {
-          const animal = getRandomAnimal(hasRareBoost, rareBoost);
+          const animal = getRandomAnimal(hasRareBoost, rareBoost * routeRareBoost);
           return { found: true, result: animal, type: 'animal' as const };
         } else if (random < animalChance + driftwoodChance) {
           const item = getRandomDriftwood();
@@ -417,6 +430,18 @@ export const useGameStore = create<GameStore>()(
         });
 
         set({ rescuedAnimals: newAnimals, inventory: newInventory });
+
+        const state1 = get();
+        const rescuedAnimal = state1.rescuedAnimals.find(a => a.id === rescuedId);
+        if (rescuedAnimal) {
+          const key = rescuedAnimal.id;
+          set({
+            treatmentCounts: {
+              ...state1.treatmentCounts,
+              [key]: (state1.treatmentCounts[key] || 0) + 1,
+            },
+          });
+        }
       },
 
       assignToCareSlot: (rescuedId, slotId) => {
@@ -458,6 +483,18 @@ export const useGameStore = create<GameStore>()(
 
         const completedCareEvents = animal.careEvents.filter(e => e.completed);
         const preferredMatches = completedCareEvents.filter(e => e.wasPreferred).length;
+        const treatmentCount = state.treatmentCounts[rescuedId] || 0;
+
+        const dynamicNotes = generateRecoveryStory(
+          animalData.name,
+          animalData.personalityLabel,
+          CARE_TYPE_LABELS[animalData.preferredCare],
+          treatmentCount,
+          state.day - animal.rescueDate,
+          preferredMatches,
+          coinGain,
+          repGain,
+        );
 
         const recoveryRecord: RecoveryRecord = {
           id: generateId(),
@@ -471,7 +508,11 @@ export const useGameStore = create<GameStore>()(
           careEvents: completedCareEvents.map(e => e.title + (e.wasPreferred ? '(偏爱)' : '')),
           preferredCareMatches: preferredMatches,
           totalDays: state.day - animal.rescueDate,
-          notes: RECOVERY_NOTES[Math.floor(Math.random() * RECOVERY_NOTES.length)],
+          notes: dynamicNotes,
+          treatmentCount,
+          coinReward: coinGain,
+          reputationReward: repGain,
+          explorationRoute: state.lastRoute,
         };
 
         const newSlots = state.careSlots.map(s => {
@@ -937,7 +978,23 @@ export const useGameStore = create<GameStore>()(
         const state = get();
         return [...state.dailyLedgers].slice(-days).reverse();
       },
+
+      canAffordRoute: (routeId) => {
+        const state = get();
+        const route = BEACH_ROUTES.find(r => r.id === routeId);
+        if (!route) return false;
+        for (const cost of route.costSupplies) {
+          const item = state.inventory.find(i => i.id === cost.id);
+          if (!item || item.quantity < cost.quantity) return false;
+        }
+        return true;
+      },
+
+      getAnimalRecords: (animalId) => {
+        const state = get();
+        return state.recoveryRecords.filter(r => r.animalId === animalId);
+      },
     }),
-    { name: 'island-rescue-game-v4' }
+    { name: 'island-rescue-game-v5' }
   )
 );

@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { useGameStore } from '../store/useGameStore';
-import { ANIMALS } from '../data/gameData';
+import { ANIMALS, ANIMAL_CATEGORIES, BEACH_ROUTES } from '../data/gameData';
 import { Animal, RecoveryRecord } from '../types/game';
 
 export const AlbumScene = () => {
-  const { discoveredAnimals, reputation, getRecoveryRecords } = useGameStore();
+  const { discoveredAnimals, reputation, getRecoveryRecords, getAnimalRecords } = useGameStore();
   const [selectedAnimal, setSelectedAnimal] = useState<Animal | null>(null);
   const [activeTab, setActiveTab] = useState<'album' | 'records'>('album');
   const recoveryRecords = getRecoveryRecords();
@@ -13,7 +13,7 @@ export const AlbumScene = () => {
     common: 'from-gray-400 to-gray-500',
     uncommon: 'from-green-400 to-green-600',
     rare: 'from-blue-400 to-blue-600',
-    legendary: 'from-yellow-400 to-orange-500',
+    legendary: 'from-gradient-to-r from-yellow-400 to-orange-500',
   };
 
   const rarityLabels: Record<string, string> = {
@@ -30,6 +30,22 @@ export const AlbumScene = () => {
     legendary: 'bg-gradient-to-r from-yellow-200 to-orange-200 text-orange-700',
   };
 
+  const categoryEmoji: Record<string, string> = {
+    '鸟类': '🪶',
+    '爬行类': '🦎',
+    '哺乳类': '🐋',
+    '软体类': '🐙',
+    '甲壳类': '🦀',
+    '腔肠类': '🪼',
+    '棘皮类': '⭐',
+    '鱼类': '🐟',
+  };
+
+  const routeMap = BEACH_ROUTES.reduce<Record<string, { emoji: string; name: string }>>((acc, r) => {
+    acc[r.id] = { emoji: r.emoji, name: r.name };
+    return acc;
+  }, {});
+
   const sortedAnimals = [...ANIMALS].sort((a, b) => {
     const order = { common: 0, uncommon: 1, rare: 2, legendary: 3 };
     return order[a.rarity] - order[b.rarity];
@@ -43,6 +59,20 @@ export const AlbumScene = () => {
     { id: 'records', label: '💖 康复故事' },
   ];
 
+  const getBestRecordIndex = (records: RecoveryRecord[]): number => {
+    if (records.length <= 1) return 0;
+    let bestIdx = 0;
+    let bestScore = -1;
+    records.forEach((r, i) => {
+      const score = r.preferredCareMatches * 10 - r.totalDays;
+      if (score > bestScore) {
+        bestScore = score;
+        bestIdx = i;
+      }
+    });
+    return bestIdx;
+  };
+
   return (
     <div className="flex-1 bg-gradient-to-b from-purple-100 to-indigo-100 p-4 overflow-auto">
       <div className="max-w-4xl mx-auto">
@@ -51,7 +81,6 @@ export const AlbumScene = () => {
           <p className="text-purple-500">记录你救助过的所有小动物和它们的康复故事</p>
         </div>
 
-        {/* 标签切换 */}
         <div className="flex gap-2 mb-6 flex-wrap justify-center">
           {tabs.map(tab => (
             <button
@@ -75,7 +104,6 @@ export const AlbumScene = () => {
 
         {activeTab === 'album' && (
           <>
-            {/* 收集进度 */}
             <div className="bg-white rounded-xl p-4 mb-6 shadow-md">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="font-bold text-gray-700">🏆 收集进度</h3>
@@ -94,11 +122,11 @@ export const AlbumScene = () => {
               </p>
             </div>
 
-            {/* 动物网格 */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {sortedAnimals.map(animal => {
                 const discovered = discoveredAnimals.includes(animal.id);
-                
+                const category = ANIMAL_CATEGORIES[animal.id];
+
                 return (
                   <div
                     key={animal.id}
@@ -117,9 +145,16 @@ export const AlbumScene = () => {
                         {discovered ? animal.name : '???'}
                       </p>
                       {discovered && (
-                        <span className={`inline-block mt-2 text-xs px-2 py-0.5 rounded-full ${rarityBadgeColors[animal.rarity]}`}>
-                          {rarityLabels[animal.rarity]}
-                        </span>
+                        <div className="flex items-center justify-center gap-1 mt-2 flex-wrap">
+                          <span className={`inline-block text-xs px-2 py-0.5 rounded-full ${rarityBadgeColors[animal.rarity]}`}>
+                            {rarityLabels[animal.rarity]}
+                          </span>
+                          {category && (
+                            <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-white/30 text-white">
+                              {categoryEmoji[category] || '🐾'} {category}
+                            </span>
+                          )}
+                        </div>
                       )}
                     </div>
                     {discovered && animal.rarity === 'legendary' && (
@@ -138,55 +173,81 @@ export const AlbumScene = () => {
           <div>
             {recoveryRecords.length > 0 ? (
               <div className="space-y-4">
-                {recoveryRecords.map(record => (
-                  <div key={record.id} className="bg-gradient-to-r from-green-50 to-blue-50 rounded-2xl p-5 border-2 border-green-200 shadow-md">
-                    <div className="flex items-start gap-4 mb-4">
-                      <div className="text-6xl">{record.animalEmoji}</div>
-                      <div className="flex-1">
-                        <h3 className="text-xl font-bold text-gray-800">{record.animalName}</h3>
-                        <div className="flex gap-3 mt-2 flex-wrap">
-                          <span className="text-xs bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-medium">
-                            {record.animalPersonality}
-                          </span>
-                          <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
-                            偏爱{record.preferredCare}
-                          </span>
-                          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
-                            📅 第 {record.rescueDate} 天救助
-                          </span>
-                          <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
-                            🌊 第 {record.releaseDate} 天放归
-                          </span>
-                          <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
-                            ⏱️ 共 {record.totalDays} 天
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="bg-white rounded-xl p-4 mb-3">
-                      <p className="text-gray-700 italic">"{record.notes}"</p>
-                    </div>
-                    {record.preferredCareMatches > 0 && (
-                      <div className="bg-gradient-to-r from-green-100 to-emerald-100 rounded-xl p-3 mb-3 border border-green-300">
-                        <p className="text-sm text-green-800 font-medium">
-                          💖 康复统计：共完成 {record.careEvents.length} 次照护，其中 <span className="text-green-600 font-bold">{record.preferredCareMatches}</span> 次匹配它的偏好，恢复得特别快！
-                        </p>
-                      </div>
-                    )}
-                    {record.careEvents.length > 0 && (
-                      <div className="mt-2">
-                        <p className="text-xs text-gray-500 mb-2 font-medium">💝 照护互动:</p>
-                        <div className="flex flex-wrap gap-2">
-                          {record.careEvents.map((event, idx) => (
-                            <span key={idx} className="text-xs bg-pink-100 text-pink-700 px-3 py-1 rounded-full">
-                              {event}
+                {recoveryRecords.map(record => {
+                  const routeInfo = record.explorationRoute ? routeMap[record.explorationRoute] : null;
+
+                  return (
+                    <div key={record.id} className="bg-gradient-to-r from-green-50 to-blue-50 rounded-2xl p-5 border-2 border-green-200 shadow-md">
+                      <div className="flex items-start gap-4 mb-4">
+                        <div className="text-6xl">{record.animalEmoji}</div>
+                        <div className="flex-1">
+                          <h3 className="text-xl font-bold text-gray-800">{record.animalName}</h3>
+                          <div className="flex gap-3 mt-2 flex-wrap">
+                            <span className="text-xs bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-medium">
+                              {record.animalPersonality}
                             </span>
-                          ))}
+                            <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
+                              偏爱{record.preferredCare}
+                            </span>
+                            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                              📅 第 {record.rescueDate} 天救助
+                            </span>
+                            <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                              🌊 第 {record.releaseDate} 天放归
+                            </span>
+                            <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
+                              ⏱️ 共 {record.totalDays} 天
+                            </span>
+                          </div>
+                          <div className="flex gap-3 mt-2 flex-wrap">
+                            {record.treatmentCount > 0 && (
+                              <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-bold">
+                                💊 治疗 {record.treatmentCount} 次
+                              </span>
+                            )}
+                            {record.coinReward > 0 && (
+                              <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">
+                                🪙 {record.coinReward}
+                              </span>
+                            )}
+                            {record.reputationReward > 0 && (
+                              <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">
+                                ⭐ {record.reputationReward}
+                              </span>
+                            )}
+                            {routeInfo && (
+                              <span className="text-xs bg-teal-100 text-teal-700 px-2 py-0.5 rounded-full">
+                                {routeInfo.emoji} {routeInfo.name}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    )}
-                  </div>
-                ))}
+                      <div className="bg-white rounded-xl p-4 mb-3">
+                        <p className="text-gray-700 italic">"{record.notes}"</p>
+                      </div>
+                      {record.preferredCareMatches > 0 && (
+                        <div className="bg-gradient-to-r from-green-100 to-emerald-100 rounded-xl p-3 mb-3 border border-green-300">
+                          <p className="text-sm text-green-800 font-medium">
+                            💖 康复统计：共完成 {record.careEvents.length} 次照护，其中 <span className="text-green-600 font-bold">{record.preferredCareMatches}</span> 次匹配它的偏好，恢复得特别快！
+                          </p>
+                        </div>
+                      )}
+                      {record.careEvents.length > 0 && (
+                        <div className="mt-2">
+                          <p className="text-xs text-gray-500 mb-2 font-medium">💝 照护互动:</p>
+                          <div className="flex flex-wrap gap-2">
+                            {record.careEvents.map((event, idx) => (
+                              <span key={idx} className="text-xs bg-pink-100 text-pink-700 px-3 py-1 rounded-full">
+                                {event}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <div className="bg-white rounded-xl p-12 text-center shadow-md">
@@ -198,14 +259,13 @@ export const AlbumScene = () => {
           </div>
         )}
 
-        {/* 动物详情弹窗 */}
         {selectedAnimal && (
           <div
             className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
             onClick={() => setSelectedAnimal(null)}
           >
             <div
-              className={`bg-gradient-to-br ${rarityColors[selectedAnimal.rarity]} rounded-3xl p-1 max-w-md w-full shadow-2xl`}
+              className={`bg-gradient-to-br ${rarityColors[selectedAnimal.rarity]} rounded-3xl p-1 max-w-md w-full shadow-2xl max-h-[90vh] overflow-auto`}
               onClick={e => e.stopPropagation()}
             >
               <div className="bg-white rounded-3xl p-6">
@@ -214,9 +274,16 @@ export const AlbumScene = () => {
                   <h3 className="text-2xl font-bold text-gray-800">
                     {selectedAnimal.name}
                   </h3>
-                  <span className={`inline-block mt-2 text-sm px-3 py-1 rounded-full ${rarityBadgeColors[selectedAnimal.rarity]}`}>
-                    {rarityLabels[selectedAnimal.rarity]}
-                  </span>
+                  <div className="flex items-center justify-center gap-2 mt-2">
+                    <span className={`inline-block text-sm px-3 py-1 rounded-full ${rarityBadgeColors[selectedAnimal.rarity]}`}>
+                      {rarityLabels[selectedAnimal.rarity]}
+                    </span>
+                    {ANIMAL_CATEGORIES[selectedAnimal.id] && (
+                      <span className="inline-block text-sm px-3 py-1 rounded-full bg-gray-100 text-gray-600">
+                        {categoryEmoji[ANIMAL_CATEGORIES[selectedAnimal.id]] || '🐾'} {ANIMAL_CATEGORIES[selectedAnimal.id]}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="mt-6 space-y-4">
@@ -244,6 +311,8 @@ export const AlbumScene = () => {
                       </p>
                     </div>
                   </div>
+
+                  <AnimalRescueHistory animalId={selectedAnimal.id} getAnimalRecords={getAnimalRecords} />
                 </div>
 
                 <button
@@ -256,6 +325,81 @@ export const AlbumScene = () => {
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+};
+
+const AnimalRescueHistory = ({
+  animalId,
+  getAnimalRecords,
+}: {
+  animalId: string;
+  getAnimalRecords: (id: string) => RecoveryRecord[];
+}) => {
+  const records = getAnimalRecords(animalId);
+  if (records.length === 0) return null;
+
+  const bestIdx = records.reduce((best, r, i) => {
+    const score = r.preferredCareMatches * 10 - r.totalDays;
+    const bestScore = records[best].preferredCareMatches * 10 - records[best].totalDays;
+    return score > bestScore ? i : best;
+  }, 0);
+
+  return (
+    <div className="bg-purple-50 rounded-xl p-4">
+      <h4 className="font-bold text-purple-700 mb-3">📚 救助历史 ({records.length} 次)</h4>
+      <div className="space-y-3">
+        {records.map((record, idx) => {
+          const isBest = idx === bestIdx && records.length > 1;
+
+          return (
+            <div
+              key={record.id}
+              className={`rounded-lg p-3 text-sm ${
+                isBest
+                  ? 'bg-gradient-to-r from-yellow-50 to-amber-50 border-2 border-yellow-300'
+                  : 'bg-white border border-gray-200'
+              }`}
+            >
+              {isBest && (
+                <div className="text-xs font-bold text-yellow-600 mb-1">🏆 最佳记录</div>
+              )}
+              <div className="flex flex-wrap gap-2 mb-2">
+                <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                  📅 第{record.rescueDate}天救助
+                </span>
+                <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                  🌊 第{record.releaseDate}天放归
+                </span>
+                <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
+                  ⏱️ 共{record.totalDays}天
+                </span>
+                {record.treatmentCount > 0 && (
+                  <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">
+                    💊 治疗{record.treatmentCount}次
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2 mb-2">
+                <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+                  偏爱匹配 {record.preferredCareMatches} 次
+                </span>
+                {record.coinReward > 0 && (
+                  <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">
+                    🪙 {record.coinReward}
+                  </span>
+                )}
+                {record.reputationReward > 0 && (
+                  <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">
+                    ⭐ {record.reputationReward}
+                  </span>
+                )}
+              </div>
+              <p className="text-gray-600 italic text-xs">"{record.notes}"</p>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
