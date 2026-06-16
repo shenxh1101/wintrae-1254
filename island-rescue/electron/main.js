@@ -1,11 +1,14 @@
 import { app, BrowserWindow, Menu } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const isDev = !app.isPackaged;
+const isPackaged = app.isPackaged;
+const distPath = path.join(__dirname, '../dist/index.html');
+const hasDist = fs.existsSync(distPath);
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
@@ -19,18 +22,17 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      webSecurity: !isDev,
+      webSecurity: isPackaged,
     },
     icon: path.join(__dirname, 'icon.png'),
   });
 
-  if (isDev) {
-    mainWindow.loadURL('http://localhost:3000');
-  } else {
+  if (isPackaged) {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
-  }
-
-  if (isDev) {
+  } else if (hasDist) {
+    mainWindow.loadFile(distPath);
+  } else {
+    mainWindow.loadURL('http://localhost:3000');
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   }
 

@@ -231,6 +231,11 @@ export const UPGRADE_PATHS: UpgradePath[] = [
     icon: '💊',
     maxLevel: 3,
     effects: ['治疗效果 +20%', '治疗效果 +40%', '治疗效果 +60%'],
+    costs: [
+      { coins: 200, reputation: 30 },
+      { coins: 500, reputation: 80 },
+      { coins: 1200, reputation: 150 },
+    ],
   },
   {
     id: 'recovery',
@@ -239,6 +244,11 @@ export const UPGRADE_PATHS: UpgradePath[] = [
     icon: '💚',
     maxLevel: 3,
     effects: ['恢复速度 +10%', '恢复速度 +25%', '恢复速度 +50%'],
+    costs: [
+      { coins: 250, reputation: 40 },
+      { coins: 600, reputation: 100 },
+      { coins: 1500, reputation: 200 },
+    ],
   },
   {
     id: 'exploration',
@@ -247,8 +257,21 @@ export const UPGRADE_PATHS: UpgradePath[] = [
     icon: '🔍',
     maxLevel: 3,
     effects: ['动物发现率 +15%', '漂流物发现率 +20%', '稀有发现率 +10%'],
+    costs: [
+      { coins: 150, reputation: 20 },
+      { coins: 400, reputation: 60 },
+      { coins: 1000, reputation: 120 },
+    ],
   },
 ];
+
+export const MEDICAL_BOOSTS = [1.2, 1.4, 1.6];
+export const RECOVERY_BOOSTS = [1.1, 1.25, 1.5];
+export const EXPLORATION_BOOSTS = {
+  animal: [1.15, 1.3, 1.5],
+  driftwood: [1.2, 1.4, 1.6],
+  rare: [1.1, 1.2, 1.35],
+};
 
 export const WEATHERS: Weather[] = [
   {

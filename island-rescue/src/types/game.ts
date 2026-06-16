@@ -177,6 +177,13 @@ export interface UpgradePath {
   icon: string;
   maxLevel: number;
   effects: string[];
+  costs: { coins: number; reputation?: number }[];
+}
+
+export interface UpgradeLevels {
+  medical: number;
+  recovery: number;
+  exploration: number;
 }
 
 export type SceneType = 'beach' | 'clinic' | 'warehouse' | 'album' | 'tasks';
@@ -216,4 +223,5 @@ export interface GameState {
   dailyLedgers: DailyLedger[];
   currentDayLedger: DailyLedger;
   festivalStats: FestivalStats;
+  upgradeLevels: UpgradeLevels;
 }

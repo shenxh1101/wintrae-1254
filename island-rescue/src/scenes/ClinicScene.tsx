@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useGameStore } from '../store/useGameStore';
 import { ANIMALS, CARE_TYPE_LABELS } from '../data/gameData';
-import { RescuedAnimal, CareEvent } from '../types/game';
+import { RescuedAnimal, CareEvent, CareEventType } from '../types/game';
 
 export const ClinicScene = () => {
   const {
@@ -12,6 +12,7 @@ export const ClinicScene = () => {
     releaseAnimal,
     inventory,
     completeCareEvent,
+    canCompleteCareEvent,
   } = useGameStore();
   const [selectedAnimal, setSelectedAnimal] = useState<RescuedAnimal | null>(null);
   const [message, setMessage] = useState('');
@@ -25,11 +26,6 @@ export const ClinicScene = () => {
     const medicine = inventory.find(i => i.id === 'medicine')?.quantity || 0;
     const towel = inventory.find(i => i.id === 'towel')?.quantity || 0;
     return bandage > 0 && medicine > 0 && towel > 0;
-  };
-
-  const hasFood = () => {
-    const food = inventory.find(i => i.id === 'food')?.quantity || 0;
-    return food > 0;
   };
 
   const handleTreat = (animalId: string) => {
@@ -53,19 +49,42 @@ export const ClinicScene = () => {
     const animalData = ANIMALS.find(a => a.id === animal?.animalId);
     if (animalData) {
       releaseAnimal(animalId);
-      setMessage(`🎉 ${animalData.name} 康复放归啦！获得声望 +${animalData.reputationReward}`);
+      setMessage(`🎉 ${animalData.name} 康复放归啦！获得声望 +${animalData.reputationReward} 金币 +${Math.floor(animalData.reputationReward * 0.5)}`);
       setSelectedAnimal(null);
     }
   };
 
-  const handleCareEvent = (rescuedId: string, eventId: string) => {
-    if (!hasFood()) {
-      setMessage('⚠️ 鱼食不足！去仓库商店购买一些吧~');
-      setTimeout(() => setMessage(''), 2000);
+  const getCareEventSupplyLabel = (type: CareEventType) => {
+    switch (type) {
+      case 'feed': return '🐟';
+      case 'clean': return '🧻';
+      case 'play': return '💝';
+      default: return '✅';
+    }
+  };
+
+  const getCareEventSupplyText = (type: CareEventType) => {
+    switch (type) {
+      case 'feed': return '鱼食×1';
+      case 'clean': return '毛巾/刷子×1';
+      case 'play': return '不消耗';
+      default: return '';
+    }
+  };
+
+  const handleCareEvent = (rescuedId: string, eventId: string, eventType: CareEventType) => {
+    if (!canCompleteCareEvent(eventType)) {
+      const supplyText = getCareEventSupplyText(eventType);
+      setMessage(`⚠️ 物资不足！${eventType === 'feed' ? '鱼食' : eventType === 'clean' ? '毛巾或刷子' : '物资'}不够，去仓库商店购买一些吧~`);
+      setTimeout(() => setMessage(''), 2500);
       return;
     }
-    completeCareEvent(rescuedId, eventId);
-    setMessage('💕 照护完成！动物恢复得更快了~');
+    const success = completeCareEvent(rescuedId, eventId);
+    if (success) {
+      setMessage('💕 照护完成！动物恢复得更快了~');
+    } else {
+      setMessage('❌ 完成照护失败，请稍后重试');
+    }
     setTimeout(() => setMessage(''), 2000);
   };
 
@@ -145,18 +164,18 @@ export const ClinicScene = () => {
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleCareEvent(animal.id, event.id);
+                      handleCareEvent(animal.id, event.id, event.type);
                     }}
-                    disabled={!hasFood()}
-                    className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${
-                      hasFood()
+                    disabled={!canCompleteCareEvent(event.type)}
+                    className={`px-3 py-1 rounded-full text-xs font-bold transition-all whitespace-nowrap ${
+                      canCompleteCareEvent(event.type)
                         ? isPreferred
                           ? 'bg-green-500 text-white hover:bg-green-600 shadow-sm'
                           : 'bg-white hover:bg-gray-50 shadow-sm'
                         : 'bg-gray-200 text-gray-500 cursor-not-allowed'
                     }`}
                   >
-                    🐟 {isPreferred ? '效果+50%' : '完成'}
+                    {getCareEventSupplyLabel(event.type)} {isPreferred ? '效果+50%' : '完成'}
                   </button>
                 </div>
               );

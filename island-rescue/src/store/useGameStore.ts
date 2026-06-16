@@ -12,6 +12,7 @@ import {
   PendingItem,
   DailyLedger,
   StationLevel,
+  CareEventType,
 } from '../types/game';
 import {
   ANIMALS,
@@ -29,6 +30,10 @@ import {
   STATION_LEVELS,
   createEmptyLedger,
   CARE_TYPE_LABELS,
+  UPGRADE_PATHS,
+  MEDICAL_BOOSTS,
+  RECOVERY_BOOSTS,
+  EXPLORATION_BOOSTS,
 } from '../data/gameData';
 
 interface FestivalStats {
@@ -66,7 +71,7 @@ interface GameStore extends GameState {
   collectPendingItem: (pendingId: string) => boolean;
   discardPendingItem: (pendingId: string) => void;
   clearPendingItems: () => void;
-  completeCareEvent: (rescuedId: string, eventId: string) => void;
+  completeCareEvent: (rescuedId: string, eventId: string) => boolean;
   getRecoveryRecords: () => RecoveryRecord[];
   getFestivalLogs: () => FestivalLog[];
   getStationLevel: () => StationLevel;
@@ -76,6 +81,10 @@ interface GameStore extends GameState {
   spendCoins: (amount: number) => void;
   earnCoins: (amount: number) => void;
   earnReputation: (amount: number) => void;
+  spendReputation: (amount: number) => boolean;
+  upgradePath: (pathId: 'medical' | 'recovery' | 'exploration') => boolean;
+  getUpgradeLevel: (pathId: 'medical' | 'recovery' | 'exploration') => number;
+  canCompleteCareEvent: (type: CareEventType) => boolean;
 }
 
 const getRandomWeather = () => {
@@ -89,12 +98,13 @@ const getRandomWeather = () => {
   return WEATHERS[0];
 };
 
-const getRandomAnimal = (boostRare = false): Animal => {
+const getRandomAnimal = (boostRare = false, rareMultiplier = 1): Animal => {
   const common = ANIMALS.filter(a => a.rarity === 'common');
   const uncommon = ANIMALS.filter(a => a.rarity === 'uncommon');
   const rare = ANIMALS.filter(a => a.rarity === 'rare');
   const legendary = ANIMALS.filter(a => a.rarity === 'legendary');
   let rareBoost = boostRare ? 2 : 1;
+  rareBoost *= rareMultiplier;
   const weights = { common: 60, uncommon: 25, rare: 12 * rareBoost, legendary: 3 * rareBoost };
   const total = Object.values(weights).reduce((a, b) => a + b, 0);
   let random = Math.random() * total;
@@ -168,18 +178,46 @@ export const useGameStore = create<GameStore>()(
       dailyLedgers: [],
       currentDayLedger: createEmptyLedger(1),
       festivalStats: initialFestivalStats,
+      upgradeLevels: { medical: 0, recovery: 0, exploration: 0 },
 
       setScene: (scene) => set({ currentScene: scene }),
+
+      getUpgradeLevel: (pathId) => {
+        const state = get();
+        return state.upgradeLevels[pathId];
+      },
+
+      canCompleteCareEvent: (type) => {
+        const state = get();
+        if (type === 'feed') {
+          const food = state.inventory.find(i => i.id === 'food');
+          return !!food && food.quantity >= 1;
+        }
+        if (type === 'clean') {
+          const towel = state.inventory.find(i => i.id === 'towel');
+          const brush = state.inventory.find(i => i.id === 'brush');
+          return (!!towel && towel.quantity >= 1) || (!!brush && brush.quantity >= 1);
+        }
+        if (type === 'play') {
+          return true;
+        }
+        return false;
+      },
 
       searchBeach: () => {
         const state = get();
         const weather = state.currentWeather;
         const hasRareBoost = state.activeFestival?.effects.includes('rare_animal_boost');
-        const animalChance = 0.4 * weather.animalSpawnRate;
-        const driftwoodChance = 0.4 * weather.driftwoodSpawnRate;
+        const explLevel = state.upgradeLevels.exploration;
+        const animalBoost = explLevel > 0 ? EXPLORATION_BOOSTS.animal[explLevel - 1] : 1;
+        const driftwoodBoost = explLevel > 0 ? EXPLORATION_BOOSTS.driftwood[explLevel - 1] : 1;
+        const rareBoost = explLevel > 0 ? EXPLORATION_BOOSTS.rare[explLevel - 1] : 1;
+
+        const animalChance = 0.4 * weather.animalSpawnRate * animalBoost;
+        const driftwoodChance = 0.4 * weather.driftwoodSpawnRate * driftwoodBoost;
         const random = Math.random();
         if (random < animalChance) {
-          const animal = getRandomAnimal(hasRareBoost);
+          const animal = getRandomAnimal(hasRareBoost, rareBoost);
           return { found: true, result: animal, type: 'animal' as const };
         } else if (random < animalChance + driftwoodChance) {
           const item = getRandomDriftwood();
@@ -191,35 +229,39 @@ export const useGameStore = create<GameStore>()(
 
       earnCoins: (amount) => {
         const state = get();
+        const newLedger = {
+          ...state.currentDayLedger,
+          coinsEarned: state.currentDayLedger.coinsEarned + amount,
+        };
+        const newFestivalStats = state.activeFestival
+          ? {
+              ...state.festivalStats,
+              coinsEarned: state.festivalStats.coinsEarned + amount,
+            }
+          : state.festivalStats;
         set({
           coins: state.coins + amount,
-          currentDayLedger: {
-            ...state.currentDayLedger,
-            coinsEarned: state.currentDayLedger.coinsEarned + amount,
-          },
-          festivalStats: state.activeFestival
-            ? {
-                ...state.festivalStats,
-                coinsEarned: state.festivalStats.coinsEarned + amount,
-              }
-            : state.festivalStats,
+          currentDayLedger: newLedger,
+          festivalStats: newFestivalStats,
         });
       },
 
       spendCoins: (amount) => {
         const state = get();
+        const newLedger = {
+          ...state.currentDayLedger,
+          coinsSpent: state.currentDayLedger.coinsSpent + amount,
+        };
+        const newFestivalStats = state.activeFestival
+          ? {
+              ...state.festivalStats,
+              coinsSpent: state.festivalStats.coinsSpent + amount,
+            }
+          : state.festivalStats;
         set({
           coins: state.coins - amount,
-          currentDayLedger: {
-            ...state.currentDayLedger,
-            coinsSpent: state.currentDayLedger.coinsSpent + amount,
-          },
-          festivalStats: state.activeFestival
-            ? {
-                ...state.festivalStats,
-                coinsSpent: state.festivalStats.coinsSpent + amount,
-              }
-            : state.festivalStats,
+          currentDayLedger: newLedger,
+          festivalStats: newFestivalStats,
         });
       },
 
@@ -227,20 +269,54 @@ export const useGameStore = create<GameStore>()(
         const state = get();
         const newRep = state.reputation + amount;
         const newLevel = STATION_LEVELS.filter(l => l.requiredReputation <= newRep).pop()?.level || 1;
+        const newLedger = {
+          ...state.currentDayLedger,
+          reputationEarned: state.currentDayLedger.reputationEarned + amount,
+        };
+        const newFestivalStats = state.activeFestival
+          ? {
+              ...state.festivalStats,
+              reputationEarned: state.festivalStats.reputationEarned + amount,
+            }
+          : state.festivalStats;
         set({
           reputation: newRep,
           stationLevel: newLevel,
-          currentDayLedger: {
-            ...state.currentDayLedger,
-            reputationEarned: state.currentDayLedger.reputationEarned + amount,
-          },
-          festivalStats: state.activeFestival
-            ? {
-                ...state.festivalStats,
-                reputationEarned: state.festivalStats.reputationEarned + amount,
-              }
-            : state.festivalStats,
+          currentDayLedger: newLedger,
+          festivalStats: newFestivalStats,
         });
+      },
+
+      spendReputation: (amount) => {
+        const state = get();
+        if (state.reputation < amount) return false;
+        set({ reputation: state.reputation - amount });
+        return true;
+      },
+
+      upgradePath: (pathId) => {
+        const state = get();
+        const currentLevel = state.upgradeLevels[pathId];
+        const pathData = UPGRADE_PATHS.find(p => p.id === pathId);
+        if (!pathData || currentLevel >= pathData.maxLevel) return false;
+
+        const cost = pathData.costs[currentLevel];
+        if (state.coins < cost.coins) return false;
+        if (cost.reputation && state.reputation < cost.reputation) return false;
+
+        get().spendCoins(cost.coins);
+        if (cost.reputation) {
+          const success = get().spendReputation(cost.reputation);
+          if (!success) return false;
+        }
+
+        set({
+          upgradeLevels: {
+            ...state.upgradeLevels,
+            [pathId]: currentLevel + 1,
+          },
+        });
+        return true;
       },
 
       rescueAnimal: (animalId) => {
@@ -284,22 +360,25 @@ export const useGameStore = create<GameStore>()(
           return t;
         });
 
+        const newLedger = {
+          ...state.currentDayLedger,
+          animalsRescued: state.currentDayLedger.animalsRescued + 1,
+        };
+        const newFestivalStats = state.activeFestival
+          ? {
+              ...state.festivalStats,
+              animalsRescued: state.festivalStats.animalsRescued + 1,
+              rescuedAnimalNames: [...state.festivalStats.rescuedAnimalNames, animal.name],
+            }
+          : state.festivalStats;
+
         set({
           rescuedAnimals: [...state.rescuedAnimals, newRescued],
           discoveredAnimals: newDiscovered,
           tasks: newTasks,
           lastBeachSearch: Date.now(),
-          currentDayLedger: {
-            ...state.currentDayLedger,
-            animalsRescued: state.currentDayLedger.animalsRescued + 1,
-          },
-          festivalStats: state.activeFestival
-            ? {
-                ...state.festivalStats,
-                animalsRescued: state.festivalStats.animalsRescued + 1,
-                rescuedAnimalNames: [...state.festivalStats.rescuedAnimalNames, animal.name],
-              }
-            : state.festivalStats,
+          currentDayLedger: newLedger,
+          festivalStats: newFestivalStats,
         });
       },
 
@@ -312,6 +391,9 @@ export const useGameStore = create<GameStore>()(
         const towel = state.inventory.find(i => i.id === 'towel');
         if (!bandage || bandage.quantity < 1 || !medicine || medicine.quantity < 1 || !towel || towel.quantity < 1) return;
 
+        const medicalLevel = state.upgradeLevels.medical;
+        const medicalBoost = medicalLevel > 0 ? MEDICAL_BOOSTS[medicalLevel - 1] : 1;
+
         const newInventory = state.inventory.map(item => {
           if (item.id === 'bandage') return { ...item, quantity: item.quantity - 1 };
           if (item.id === 'medicine') return { ...item, quantity: item.quantity - 1 };
@@ -319,10 +401,13 @@ export const useGameStore = create<GameStore>()(
           return item;
         });
 
+        const baseProgress = 34 * medicalBoost;
+        const baseHealth = 25 * medicalBoost;
+
         const newAnimals = state.rescuedAnimals.map(a => {
           if (a.id === rescuedId) {
-            const newProgress = Math.min(a.treatmentProgress + 34, 100);
-            const newHealth = Math.min(a.health + 25, a.maxHealth);
+            const newProgress = Math.min(a.treatmentProgress + baseProgress, 100);
+            const newHealth = Math.min(a.health + baseHealth, a.maxHealth);
             let newStatus = a.status;
             if (newProgress >= 100 && a.careSlotId) newStatus = 'recovering';
             else if (newProgress >= 100) newStatus = 'treating';
@@ -383,7 +468,7 @@ export const useGameStore = create<GameStore>()(
           preferredCare: CARE_TYPE_LABELS[animalData.preferredCare],
           rescueDate: animal.rescueDate,
           releaseDate: state.day,
-          careEvents: completedCareEvents.map(e => e.title),
+          careEvents: completedCareEvents.map(e => e.title + (e.wasPreferred ? '(偏爱)' : '')),
           preferredCareMatches: preferredMatches,
           totalDays: state.day - animal.rescueDate,
           notes: RECOVERY_NOTES[Math.floor(Math.random() * RECOVERY_NOTES.length)],
@@ -409,22 +494,26 @@ export const useGameStore = create<GameStore>()(
         get().earnReputation(repGain);
         get().earnCoins(coinGain);
 
+        const state2 = get();
+        const newLedger = {
+          ...state2.currentDayLedger,
+          animalsReleased: state2.currentDayLedger.animalsReleased + 1,
+        };
+        const newFestivalStats = state2.activeFestival
+          ? {
+              ...state2.festivalStats,
+              animalsReleased: state2.festivalStats.animalsReleased + 1,
+              releasedAnimalNames: [...state2.festivalStats.releasedAnimalNames, animalData.name],
+            }
+          : state2.festivalStats;
+
         set({
-          rescuedAnimals: state.rescuedAnimals.filter(a => a.id !== rescuedId),
+          rescuedAnimals: state2.rescuedAnimals.filter(a => a.id !== rescuedId),
           careSlots: newSlots,
           tasks: newTasks,
-          recoveryRecords: [...state.recoveryRecords, recoveryRecord],
-          currentDayLedger: {
-            ...state.currentDayLedger,
-            animalsReleased: state.currentDayLedger.animalsReleased + 1,
-          },
-          festivalStats: state.activeFestival
-            ? {
-                ...state.festivalStats,
-                animalsReleased: state.festivalStats.animalsReleased + 1,
-                releasedAnimalNames: [...state.festivalStats.releasedAnimalNames, animalData.name],
-              }
-            : state.festivalStats,
+          recoveryRecords: [...state2.recoveryRecords, recoveryRecord],
+          currentDayLedger: newLedger,
+          festivalStats: newFestivalStats,
         });
       },
 
@@ -434,23 +523,23 @@ export const useGameStore = create<GameStore>()(
 
         if (item.type === 'trash') {
           get().earnCoins(item.value);
-          set(state => ({
-            tasks: state.tasks.map(t => {
-              if (t.id === 'collect_5' && !t.completed) {
-                const newProgress = Math.min(t.progress + 1, t.target);
-                return { ...t, progress: newProgress, completed: newProgress >= t.target };
-              }
-              if (t.type === 'festival' && t.festivalId === state.activeFestival?.id && t.id === 'festival_gift_collect' && !t.completed) {
-                const newProgress = Math.min(t.progress + 1, t.target);
-                return { ...t, progress: newProgress, completed: newProgress >= t.target };
-              }
-              return t;
-            }),
-            currentDayLedger: {
-              ...state.currentDayLedger,
-              itemsCollected: state.currentDayLedger.itemsCollected + 1,
-            },
-          }));
+          const state1 = get();
+          const newTasks = state1.tasks.map(t => {
+            if (t.id === 'collect_5' && !t.completed) {
+              const newProgress = Math.min(t.progress + 1, t.target);
+              return { ...t, progress: newProgress, completed: newProgress >= t.target };
+            }
+            if (t.type === 'festival' && t.festivalId === state1.activeFestival?.id && t.id === 'festival_gift_collect' && !t.completed) {
+              const newProgress = Math.min(t.progress + 1, t.target);
+              return { ...t, progress: newProgress, completed: newProgress >= t.target };
+            }
+            return t;
+          });
+          const newLedger = {
+            ...state1.currentDayLedger,
+            itemsCollected: state1.currentDayLedger.itemsCollected + 1,
+          };
+          set({ tasks: newTasks, currentDayLedger: newLedger });
           return true;
         }
 
@@ -469,24 +558,23 @@ export const useGameStore = create<GameStore>()(
           ];
         }
 
-        set(state => ({
-          inventory: newInventory,
-          tasks: state.tasks.map(t => {
-            if (t.id === 'collect_5' && !t.completed) {
-              const newProgress = Math.min(t.progress + 1, t.target);
-              return { ...t, progress: newProgress, completed: newProgress >= t.target };
-            }
-            if (t.type === 'festival' && t.festivalId === state.activeFestival?.id && t.id === 'festival_gift_collect' && !t.completed) {
-              const newProgress = Math.min(t.progress + 1, t.target);
-              return { ...t, progress: newProgress, completed: newProgress >= t.target };
-            }
-            return t;
-          }),
-          currentDayLedger: {
-            ...state.currentDayLedger,
-            itemsCollected: state.currentDayLedger.itemsCollected + 1,
-          },
-        }));
+        const newTasks = state.tasks.map(t => {
+          if (t.id === 'collect_5' && !t.completed) {
+            const newProgress = Math.min(t.progress + 1, t.target);
+            return { ...t, progress: newProgress, completed: newProgress >= t.target };
+          }
+          if (t.type === 'festival' && t.festivalId === state.activeFestival?.id && t.id === 'festival_gift_collect' && !t.completed) {
+            const newProgress = Math.min(t.progress + 1, t.target);
+            return { ...t, progress: newProgress, completed: newProgress >= t.target };
+          }
+          return t;
+        });
+        const newLedger = {
+          ...state.currentDayLedger,
+          itemsCollected: state.currentDayLedger.itemsCollected + 1,
+        };
+
+        set({ inventory: newInventory, tasks: newTasks, currentDayLedger: newLedger });
         return true;
       },
 
@@ -551,8 +639,9 @@ export const useGameStore = create<GameStore>()(
         if (state.coins < decoration.cost) return false;
         if (state.stationLevel < decoration.unlockLevel) return false;
         get().spendCoins(decoration.cost);
+        const state1 = get();
         set({
-          decorations: [...state.decorations, decorationId],
+          decorations: [...state1.decorations, decorationId],
         });
         return true;
       },
@@ -566,14 +655,16 @@ export const useGameStore = create<GameStore>()(
         } else if (task.reward.type === 'reputation') {
           get().earnReputation(task.reward.amount);
         }
+        const state1 = get();
+        const newFestivalStats = state1.activeFestival && task.type === 'festival'
+          ? {
+              ...state1.festivalStats,
+              tasksClaimed: state1.festivalStats.tasksClaimed + 1,
+            }
+          : state1.festivalStats;
         set({
-          tasks: state.tasks.map(t => t.id === taskId ? { ...t, claimed: true } : t),
-          festivalStats: state.activeFestival && task.type === 'festival'
-            ? {
-                ...state.festivalStats,
-                tasksClaimed: state.festivalStats.tasksClaimed + 1,
-              }
-            : state.festivalStats,
+          tasks: state1.tasks.map(t => t.id === taskId ? { ...t, claimed: true } : t),
+          festivalStats: newFestivalStats,
         });
       },
 
@@ -581,6 +672,9 @@ export const useGameStore = create<GameStore>()(
         const state = get();
         const newDay = state.day + 1;
         const newWeather = getRandomWeather();
+
+        const recoveryLevel = state.upgradeLevels.recovery;
+        const recoveryBoost = recoveryLevel > 0 ? RECOVERY_BOOSTS[recoveryLevel - 1] : 1;
 
         const newAnimals = state.rescuedAnimals.map(animal => {
           if (animal.status === 'recovering' && animal.careSlotId) {
@@ -590,7 +684,7 @@ export const useGameStore = create<GameStore>()(
               const baseRecovery = 100 / animalData.recoveryDays;
               const slotBoost = slot.recoveryBoost;
               const careBoost = 1 + (animal.recoverySpeedBoost / 100);
-              const recoveryPerDay = baseRecovery * slotBoost * careBoost;
+              const recoveryPerDay = baseRecovery * slotBoost * careBoost * recoveryBoost;
               const newHealth = Math.min(animal.health + recoveryPerDay, animal.maxHealth);
               const pendingEvents = animal.careEvents.filter(e => !e.completed && e.dayGenerated < newDay);
               const activeEvents = pendingEvents.length > 0 ? pendingEvents : [generateCareEvent(newDay)];
@@ -676,7 +770,8 @@ export const useGameStore = create<GameStore>()(
           get().earnCoins(giftCoins);
         }
 
-        const completedLedger = { ...state.currentDayLedger };
+        const state1 = get();
+        const completedLedger = { ...state1.currentDayLedger };
         const newLedger = createEmptyLedger(newDay);
 
         set({
@@ -687,7 +782,7 @@ export const useGameStore = create<GameStore>()(
           activeFestival: newFestival,
           festivalLogs: newFestivalLogs,
           lastBeachSearch: undefined,
-          dailyLedgers: [...state.dailyLedgers, completedLedger],
+          dailyLedgers: [...state1.dailyLedgers, completedLedger],
           currentDayLedger: newLedger,
           festivalStats: festivalStats,
         });
@@ -735,6 +830,7 @@ export const useGameStore = create<GameStore>()(
           newInventory = [...state.inventory, { ...itemData, quantity }];
         }
         get().spendCoins(totalCost);
+        const state1 = get();
         set({ inventory: newInventory });
         return true;
       },
@@ -749,11 +845,12 @@ export const useGameStore = create<GameStore>()(
         const price = sellPrices[itemId] || 1;
         const totalPrice = price * quantity;
         get().earnCoins(totalPrice);
+        const state1 = get();
         set({
-          inventory: state.inventory.map(i => i.id === itemId ? { ...i, quantity: i.quantity - quantity } : i).filter(i => i.quantity > 0),
+          inventory: state1.inventory.map(i => i.id === itemId ? { ...i, quantity: i.quantity - quantity } : i).filter(i => i.quantity > 0),
           currentDayLedger: {
-            ...state.currentDayLedger,
-            itemsSold: state.currentDayLedger.itemsSold + quantity,
+            ...state1.currentDayLedger,
+            itemsSold: state1.currentDayLedger.itemsSold + quantity,
           },
         });
         return true;
@@ -761,40 +858,64 @@ export const useGameStore = create<GameStore>()(
 
       completeCareEvent: (rescuedId, eventId) => {
         const state = get();
-        const food = state.inventory.find(i => i.id === 'food');
-        if (!food || food.quantity < 1) return;
-
         const animal = state.rescuedAnimals.find(a => a.id === rescuedId);
         const animalData = ANIMALS.find(a => a.id === animal?.animalId);
-        if (!animal || !animalData) return;
+        if (!animal || !animalData) return false;
 
-        set({
-          inventory: state.inventory.map(i => i.id === 'food' ? { ...i, quantity: i.quantity - 1 } : i),
-          rescuedAnimals: state.rescuedAnimals.map(a => {
-            if (a.id === rescuedId) {
-              const completedEvent = a.careEvents.find(e => e.id === eventId);
-              if (!completedEvent || completedEvent.completed) return a;
-              const isPreferred = animalData.preferredCare === completedEvent.type;
-              const baseReward = completedEvent.reward;
-              const boostReward = isPreferred ? Math.floor(baseReward * 1.5) : baseReward;
-              const healthBoost = isPreferred ? 5 : 3;
-              const newEvents = a.careEvents.map(e => {
-                if (e.id === eventId && !e.completed) {
-                  return { ...e, completed: true, wasPreferred: isPreferred };
-                }
-                return e;
-              });
-              return {
-                ...a,
-                careEvents: newEvents,
-                recoverySpeedBoost: a.recoverySpeedBoost + boostReward,
-                health: Math.min(a.health + healthBoost, a.maxHealth),
-                preferredCareMatches: a.preferredCareMatches + (isPreferred ? 1 : 0),
-              };
-            }
-            return a;
-          }),
+        const completedEvent = animal.careEvents.find(e => e.id === eventId);
+        if (!completedEvent || completedEvent.completed) return false;
+
+        const eventType = completedEvent.type;
+        let inventoryUpdates: { id: string; delta: number }[] = [];
+
+        if (eventType === 'feed') {
+          const food = state.inventory.find(i => i.id === 'food');
+          if (!food || food.quantity < 1) return false;
+          inventoryUpdates.push({ id: 'food', delta: -1 });
+        } else if (eventType === 'clean') {
+          const towel = state.inventory.find(i => i.id === 'towel');
+          const brush = state.inventory.find(i => i.id === 'brush');
+          if ((!towel || towel.quantity < 1) && (!brush || brush.quantity < 1)) return false;
+          if (towel && towel.quantity >= 1) {
+            inventoryUpdates.push({ id: 'towel', delta: -1 });
+          } else if (brush && brush.quantity >= 1) {
+            inventoryUpdates.push({ id: 'brush', delta: -1 });
+          }
+        }
+
+        const isPreferred = animalData.preferredCare === eventType;
+        const baseReward = completedEvent.reward;
+        const boostReward = isPreferred ? Math.floor(baseReward * 1.5) : baseReward;
+        const healthBoost = isPreferred ? 5 : 3;
+
+        let newInventory = state.inventory;
+        for (const update of inventoryUpdates) {
+          newInventory = newInventory.map(item =>
+            item.id === update.id ? { ...item, quantity: item.quantity + update.delta } : item
+          );
+        }
+
+        const newAnimals = state.rescuedAnimals.map(a => {
+          if (a.id === rescuedId) {
+            const newEvents = a.careEvents.map(e => {
+              if (e.id === eventId && !e.completed) {
+                return { ...e, completed: true, wasPreferred: isPreferred };
+              }
+              return e;
+            });
+            return {
+              ...a,
+              careEvents: newEvents,
+              recoverySpeedBoost: a.recoverySpeedBoost + boostReward,
+              health: Math.min(a.health + healthBoost, a.maxHealth),
+              preferredCareMatches: a.preferredCareMatches + (isPreferred ? 1 : 0),
+            };
+          }
+          return a;
         });
+
+        set({ inventory: newInventory, rescuedAnimals: newAnimals });
+        return true;
       },
 
       getRecoveryRecords: () => get().recoveryRecords,
@@ -817,6 +938,6 @@ export const useGameStore = create<GameStore>()(
         return [...state.dailyLedgers].slice(-days).reverse();
       },
     }),
-    { name: 'island-rescue-game-v3' }
+    { name: 'island-rescue-game-v4' }
   )
 );

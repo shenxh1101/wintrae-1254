@@ -38,6 +38,8 @@ export const WarehouseScene = () => {
     getRecentLedgers,
     stationLevel,
     reputation,
+    upgradePath,
+    getUpgradeLevel,
   } = useGameStore();
   const [activeTab, setActiveTab] = useState<'items' | 'shop' | 'upgrade' | 'decorate' | 'ledger'>('items');
   const [message, setMessage] = useState('');
@@ -96,6 +98,30 @@ export const WarehouseScene = () => {
       showMessage('💰 出售成功！');
     } else {
       showMessage('❌ 物品不足');
+    }
+  };
+
+  const handleUpgradePath = (pathId: 'medical' | 'recovery' | 'exploration') => {
+    const pathData = UPGRADE_PATHS.find(p => p.id === pathId);
+    if (!pathData) return;
+    const currentLevel = getUpgradeLevel(pathId);
+    if (currentLevel >= pathData.maxLevel) {
+      showMessage('✨ 已经是最高级了！');
+      return;
+    }
+    const cost = pathData.costs[currentLevel];
+    if (coins < cost.coins) {
+      showMessage(`💰 金币不足！需要 ${cost.coins} 金币`);
+      return;
+    }
+    if (cost.reputation && reputation < cost.reputation) {
+      showMessage(`⭐ 声望不足！需要 ${cost.reputation} 声望`);
+      return;
+    }
+    if (upgradePath(pathId)) {
+      showMessage(`🚀 ${pathData.name}升级成功！已达到 ${currentLevel + 1} 级`);
+    } else {
+      showMessage('❌ 升级失败，请稍后重试');
     }
   };
 
@@ -405,26 +431,75 @@ export const WarehouseScene = () => {
             <div className="bg-white rounded-xl p-4 shadow-md">
               <h3 className="font-bold text-lg text-purple-700 mb-4">🚀 升级路线</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {UPGRADE_PATHS.map(upgrade => (
-                  <div key={upgrade.id} className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-4 border border-purple-200">
-                    <div className="text-center mb-3">
-                      <span className="text-4xl">{upgrade.icon}</span>
-                      <h4 className="font-bold text-gray-800 mt-2">{upgrade.name}</h4>
-                      <p className="text-xs text-gray-500 mt-1">{upgrade.description}</p>
-                    </div>
-                    <div className="space-y-1">
-                      {upgrade.effects.map((effect, idx) => (
-                        <div key={idx} className="flex items-center gap-2 text-xs">
-                          <span className="text-purple-500">✨</span>
-                          <span className="text-gray-600">Lv.{idx + 1}: {effect}</span>
+                {UPGRADE_PATHS.map(upgrade => {
+                  const pathId = upgrade.id as 'medical' | 'recovery' | 'exploration';
+                  const currentLevel = getUpgradeLevel(pathId);
+                  const isMaxLevel = currentLevel >= upgrade.maxLevel;
+                  const nextCost = !isMaxLevel ? upgrade.costs[currentLevel] : null;
+                  const canAfford = nextCost ? coins >= nextCost.coins && (!nextCost.reputation || reputation >= nextCost.reputation) : false;
+                  return (
+                    <div key={upgrade.id} className={`rounded-xl p-4 border transition-all ${
+                      currentLevel > 0 
+                        ? 'bg-gradient-to-br from-purple-100 to-pink-100 border-purple-400 shadow-md' 
+                        : 'bg-gradient-to-br from-purple-50 to-pink-50 border-purple-200'
+                    }`}>
+                      <div className="text-center mb-3">
+                        <span className="text-4xl">{upgrade.icon}</span>
+                        <h4 className="font-bold text-gray-800 mt-2">{upgrade.name}</h4>
+                        <p className="text-xs text-gray-500 mt-1">{upgrade.description}</p>
+                        <div className="mt-2 flex items-center justify-center gap-1">
+                          {Array.from({ length: upgrade.maxLevel }).map((_, idx) => (
+                            <span
+                              key={idx}
+                              className={`w-3 h-3 rounded-full ${
+                                idx < currentLevel ? 'bg-purple-500' : 'bg-gray-300'
+                              }`}
+                            />
+                          ))}
                         </div>
-                      ))}
+                        <p className="text-sm font-bold text-purple-700 mt-1">
+                          Lv.{currentLevel} / {upgrade.maxLevel}
+                        </p>
+                      </div>
+                      <div className="space-y-1 mb-3">
+                        {upgrade.effects.map((effect, idx) => (
+                          <div key={idx} className={`flex items-center gap-2 text-xs ${
+                            idx < currentLevel ? 'text-purple-700 font-medium' : 'text-gray-400'
+                          }`}>
+                            <span>{idx < currentLevel ? '✅' : '✨'}</span>
+                            <span>Lv.{idx + 1}: {effect}</span>
+                          </div>
+                        ))}
+                      </div>
+                      {isMaxLevel ? (
+                        <div className="text-center py-2 bg-purple-200 rounded-lg">
+                          <span className="text-sm font-bold text-purple-700">✨ 已满级</span>
+                        </div>
+                      ) : (
+                        <div>
+                          <div className="text-center text-xs text-gray-600 mb-2">
+                            升级消耗：
+                            <span className="font-bold text-amber-600 ml-1">🪙 {nextCost?.coins}</span>
+                            {nextCost?.reputation && (
+                              <span className="font-bold text-purple-600 ml-1">⭐ {nextCost.reputation}</span>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => handleUpgradePath(pathId)}
+                            disabled={!canAfford}
+                            className={`w-full py-2 rounded-lg text-sm font-bold transition-all ${
+                              canAfford
+                                ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 shadow-md'
+                                : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                            }`}
+                          >
+                            升级到 Lv.{currentLevel + 1}
+                          </button>
+                        </div>
+                      )}
                     </div>
-                    <div className="mt-3 text-center">
-                      <span className="text-xs text-gray-400">开发中...</span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
