@@ -1,3 +1,6 @@
+export type PersonalityType = 'timid' | 'greedy' | 'playful' | 'gentle' | 'curious';
+export type CareEventType = 'feed' | 'clean' | 'play';
+
 export interface Animal {
   id: string;
   name: string;
@@ -7,17 +10,21 @@ export interface Animal {
   recoveryDays: number;
   story: string;
   reputationReward: number;
+  personality: PersonalityType;
+  preferredCare: CareEventType;
+  personalityLabel: string;
 }
 
 export interface CareEvent {
   id: string;
-  type: 'feed' | 'clean' | 'play';
+  type: CareEventType;
   title: string;
   description: string;
   emoji: string;
   reward: number;
   completed: boolean;
   dayGenerated: number;
+  wasPreferred?: boolean;
 }
 
 export interface RecoveryRecord {
@@ -25,9 +32,12 @@ export interface RecoveryRecord {
   animalId: string;
   animalName: string;
   animalEmoji: string;
+  animalPersonality: string;
+  preferredCare: string;
   rescueDate: number;
   releaseDate: number;
   careEvents: string[];
+  preferredCareMatches: number;
   totalDays: number;
   notes: string;
 }
@@ -44,6 +54,7 @@ export interface RescuedAnimal {
   treatmentProgress: number;
   careEvents: CareEvent[];
   recoverySpeedBoost: number;
+  preferredCareMatches: number;
 }
 
 export interface CareSlot {
@@ -123,8 +134,12 @@ export interface FestivalLog {
   animalsRescued: number;
   animalsReleased: number;
   coinsEarned: number;
+  coinsSpent: number;
   reputationEarned: number;
   tasksCompleted: number;
+  tasksClaimed: number;
+  rescuedAnimalNames: string[];
+  releasedAnimalNames: string[];
 }
 
 export interface Decoration {
@@ -133,14 +148,56 @@ export interface Decoration {
   emoji: string;
   cost: number;
   description: string;
+  unlockLevel: number;
+}
+
+export interface StationLevel {
+  level: number;
+  name: string;
+  requiredReputation: number;
+  description: string;
+  unlocks: string[];
+}
+
+export interface DailyLedger {
+  day: number;
+  coinsEarned: number;
+  coinsSpent: number;
+  reputationEarned: number;
+  animalsRescued: number;
+  animalsReleased: number;
+  itemsCollected: number;
+  itemsSold: number;
+}
+
+export interface UpgradePath {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  maxLevel: number;
+  effects: string[];
 }
 
 export type SceneType = 'beach' | 'clinic' | 'warehouse' | 'album' | 'tasks';
+
+export interface FestivalStats {
+  animalsRescued: number;
+  animalsReleased: number;
+  coinsEarned: number;
+  coinsSpent: number;
+  reputationEarned: number;
+  tasksCompleted: number;
+  tasksClaimed: number;
+  rescuedAnimalNames: string[];
+  releasedAnimalNames: string[];
+}
 
 export interface GameState {
   day: number;
   reputation: number;
   coins: number;
+  stationLevel: number;
   currentScene: SceneType;
   currentWeather: Weather;
   rescuedAnimals: RescuedAnimal[];
@@ -156,4 +213,7 @@ export interface GameState {
   warehouseCapacity: number;
   lastBeachSearch?: number;
   pendingItems: PendingItem[];
+  dailyLedgers: DailyLedger[];
+  currentDayLedger: DailyLedger;
+  festivalStats: FestivalStats;
 }

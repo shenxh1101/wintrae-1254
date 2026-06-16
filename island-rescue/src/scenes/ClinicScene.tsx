@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useGameStore } from '../store/useGameStore';
-import { ANIMALS } from '../data/gameData';
+import { ANIMALS, CARE_TYPE_LABELS } from '../data/gameData';
 import { RescuedAnimal, CareEvent } from '../types/game';
 
 export const ClinicScene = () => {
@@ -105,6 +105,8 @@ export const ClinicScene = () => {
   const renderCareEvents = (animal: RescuedAnimal) => {
     const pendingEvents = animal.careEvents.filter(e => !e.completed);
     const completedEvents = animal.careEvents.filter(e => e.completed);
+    const animalData = getAnimalData(animal.animalId);
+    const preferredEvents = pendingEvents.filter(e => e.type === animalData?.preferredCare);
 
     if (pendingEvents.length === 0 && completedEvents.length === 0) return null;
 
@@ -113,43 +115,65 @@ export const ClinicScene = () => {
       {pendingEvents.length > 0 && (
         <div>
           <p className="text-xs text-gray-500 mb-1 font-medium">📋 需要照护:</p>
+          {preferredEvents.length > 0 && (
+            <p className="text-xs text-green-600 mb-1 font-medium">💡 提示：有它偏爱的照护方式，完成后恢复更快！</p>
+          )}
           <div className="space-y-2">
-            {pendingEvents.map(event => (
-              <div
-                key={event.id}
-                className={`p-2 rounded-lg border-2 flex items-center justify-between bg-white ${getCareEventTypeColor(event.type)}`}
-              >
-                <div className="flex items-center gap-2">
-                  <span className="text-xl">{event.emoji}</span>
-                  <div>
-                    <p className="text-sm font-medium">{event.title}</p>
-                    <p className="text-xs opacity-80">{event.description}</p>
-                  </div>
-                </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleCareEvent(animal.id, event.id);
-                  }}
-                  disabled={!hasFood()}
-                  className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${
-                    hasFood()
-                      ? 'bg-white hover:bg-gray-50 shadow-sm'
-                      : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+            {pendingEvents.map(event => {
+              const isPreferred = animalData?.preferredCare === event.type;
+              return (
+                <div
+                  key={event.id}
+                  className={`p-2 rounded-lg border-2 flex items-center justify-between bg-white ${
+                    isPreferred ? 'border-green-400 ring-2 ring-green-200' : getCareEventTypeColor(event.type)
                   }`}
                 >
-                    🐟 完成
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">{event.emoji}</span>
+                    <div>
+                      <p className="text-sm font-medium flex items-center gap-1">
+                        {event.title}
+                        {isPreferred && (
+                          <span className="text-xs bg-green-500 text-white px-1.5 py-0.5 rounded-full">
+                            偏爱
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs opacity-80">{event.description}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCareEvent(animal.id, event.id);
+                    }}
+                    disabled={!hasFood()}
+                    className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${
+                      hasFood()
+                        ? isPreferred
+                          ? 'bg-green-500 text-white hover:bg-green-600 shadow-sm'
+                          : 'bg-white hover:bg-gray-50 shadow-sm'
+                        : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                    }`}
+                  >
+                    🐟 {isPreferred ? '效果+50%' : '完成'}
                   </button>
                 </div>
-              ))}
+              );
+            })}
             </div>
           </div>
           )}
           {completedEvents.length > 0 && (
             <div className="pt-1">
               <p className="text-xs text-gray-400">
-                ✅ 已完成: {completedEvents.map(e => e.title).join('、')}
+                ✅ 已完成: {completedEvents.map(e => e.title + (e.wasPreferred ? '(偏爱)' : '')).join('、')}
               </p>
+              {animal.preferredCareMatches > 0 && (
+                <p className="text-xs text-green-600 mt-1">
+                  💖 已匹配 {animal.preferredCareMatches} 次偏好照护
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -213,9 +237,21 @@ export const ClinicScene = () => {
                         <span className="text-3xl">{data?.emoji}</span>
                         <div className="flex-1">
                           <p className="font-medium text-gray-800">{data?.name}</p>
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${getStatusColor(animal.status)}`}>
-                            {getStatusText(animal.status)}
-                          </span>
+                          <div className="flex items-center gap-1 flex-wrap mt-0.5">
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${getStatusColor(animal.status)}`}>
+                              {getStatusText(animal.status)}
+                            </span>
+                            {data && (
+                              <>
+                                <span className="text-xs bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full">
+                                  {data.personalityLabel}
+                                </span>
+                                <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+                                  偏爱{CARE_TYPE_LABELS[data.preferredCare]}
+                                </span>
+                              </>
+                            )}
+                          </div>
                         </div>
                       </div>
                       <div className="mt-2">
@@ -362,9 +398,21 @@ export const ClinicScene = () => {
                         <span className="text-3xl">{data?.emoji}</span>
                         <div className="flex-1">
                           <p className="font-medium text-gray-800">{data?.name}</p>
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${getStatusColor(animal.status)}`}>
-                            {getStatusText(animal.status)}
-                          </span>
+                          <div className="flex items-center gap-1 flex-wrap mt-0.5">
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${getStatusColor(animal.status)}`}>
+                              {getStatusText(animal.status)}
+                            </span>
+                            {data && (
+                              <>
+                                <span className="text-xs bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full">
+                                  {data.personalityLabel}
+                                </span>
+                                <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+                                  偏爱{CARE_TYPE_LABELS[data.preferredCare]}
+                                </span>
+                              </>
+                            )}
+                          </div>
                         </div>
                       </div>
                       <div className="mt-2">

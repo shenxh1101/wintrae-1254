@@ -10,6 +10,8 @@ import {
   RecoveryRecord,
   FestivalLog,
   PendingItem,
+  DailyLedger,
+  StationLevel,
 } from '../types/game';
 import {
   ANIMALS,
@@ -24,14 +26,21 @@ import {
   FESTIVAL_TASKS,
   CARE_EVENT_TEMPLATES,
   RECOVERY_NOTES,
+  STATION_LEVELS,
+  createEmptyLedger,
+  CARE_TYPE_LABELS,
 } from '../data/gameData';
 
 interface FestivalStats {
   animalsRescued: number;
   animalsReleased: number;
   coinsEarned: number;
+  coinsSpent: number;
   reputationEarned: number;
   tasksCompleted: number;
+  tasksClaimed: number;
+  rescuedAnimalNames: string[];
+  releasedAnimalNames: string[];
 }
 
 interface GameStore extends GameState {
@@ -60,6 +69,13 @@ interface GameStore extends GameState {
   completeCareEvent: (rescuedId: string, eventId: string) => void;
   getRecoveryRecords: () => RecoveryRecord[];
   getFestivalLogs: () => FestivalLog[];
+  getStationLevel: () => StationLevel;
+  getNextStationLevel: () => StationLevel | null;
+  getCurrentLedger: () => DailyLedger;
+  getRecentLedgers: (days: number) => DailyLedger[];
+  spendCoins: (amount: number) => void;
+  earnCoins: (amount: number) => void;
+  earnReputation: (amount: number) => void;
 }
 
 const getRandomWeather = () => {
@@ -113,6 +129,7 @@ const generateCareEvent = (day: number): CareEvent => {
     reward: template.reward,
     completed: false,
     dayGenerated: day,
+    wasPreferred: false,
   };
 };
 
@@ -120,8 +137,12 @@ const initialFestivalStats: FestivalStats = {
   animalsRescued: 0,
   animalsReleased: 0,
   coinsEarned: 0,
+  coinsSpent: 0,
   reputationEarned: 0,
   tasksCompleted: 0,
+  tasksClaimed: 0,
+  rescuedAnimalNames: [],
+  releasedAnimalNames: [],
 };
 
 export const useGameStore = create<GameStore>()(
@@ -130,6 +151,7 @@ export const useGameStore = create<GameStore>()(
       day: 1,
       reputation: 0,
       coins: 100,
+      stationLevel: 1,
       currentScene: 'beach',
       currentWeather: WEATHERS[0],
       rescuedAnimals: [],
@@ -143,6 +165,9 @@ export const useGameStore = create<GameStore>()(
       warehouseLevel: 1,
       warehouseCapacity: 50,
       pendingItems: [],
+      dailyLedgers: [],
+      currentDayLedger: createEmptyLedger(1),
+      festivalStats: initialFestivalStats,
 
       setScene: (scene) => set({ currentScene: scene }),
 
@@ -164,6 +189,60 @@ export const useGameStore = create<GameStore>()(
         }
       },
 
+      earnCoins: (amount) => {
+        const state = get();
+        set({
+          coins: state.coins + amount,
+          currentDayLedger: {
+            ...state.currentDayLedger,
+            coinsEarned: state.currentDayLedger.coinsEarned + amount,
+          },
+          festivalStats: state.activeFestival
+            ? {
+                ...state.festivalStats,
+                coinsEarned: state.festivalStats.coinsEarned + amount,
+              }
+            : state.festivalStats,
+        });
+      },
+
+      spendCoins: (amount) => {
+        const state = get();
+        set({
+          coins: state.coins - amount,
+          currentDayLedger: {
+            ...state.currentDayLedger,
+            coinsSpent: state.currentDayLedger.coinsSpent + amount,
+          },
+          festivalStats: state.activeFestival
+            ? {
+                ...state.festivalStats,
+                coinsSpent: state.festivalStats.coinsSpent + amount,
+              }
+            : state.festivalStats,
+        });
+      },
+
+      earnReputation: (amount) => {
+        const state = get();
+        const newRep = state.reputation + amount;
+        const newLevel = STATION_LEVELS.filter(l => l.requiredReputation <= newRep).pop()?.level || 1;
+        set({
+          reputation: newRep,
+          stationLevel: newLevel,
+          currentDayLedger: {
+            ...state.currentDayLedger,
+            reputationEarned: state.currentDayLedger.reputationEarned + amount,
+          },
+          festivalStats: state.activeFestival
+            ? {
+                ...state.festivalStats,
+                reputationEarned: state.festivalStats.reputationEarned + amount,
+              }
+            : state.festivalStats,
+        });
+      },
+
       rescueAnimal: (animalId) => {
         const state = get();
         const animal = ANIMALS.find(a => a.id === animalId);
@@ -180,6 +259,7 @@ export const useGameStore = create<GameStore>()(
           treatmentProgress: 0,
           careEvents: [],
           recoverySpeedBoost: 0,
+          preferredCareMatches: 0,
         };
 
         const newDiscovered = state.discoveredAnimals.includes(animalId)
@@ -209,6 +289,17 @@ export const useGameStore = create<GameStore>()(
           discoveredAnimals: newDiscovered,
           tasks: newTasks,
           lastBeachSearch: Date.now(),
+          currentDayLedger: {
+            ...state.currentDayLedger,
+            animalsRescued: state.currentDayLedger.animalsRescued + 1,
+          },
+          festivalStats: state.activeFestival
+            ? {
+                ...state.festivalStats,
+                animalsRescued: state.festivalStats.animalsRescued + 1,
+                rescuedAnimalNames: [...state.festivalStats.rescuedAnimalNames, animal.name],
+              }
+            : state.festivalStats,
         });
       },
 
@@ -280,15 +371,20 @@ export const useGameStore = create<GameStore>()(
         const repGain = animalData.reputationReward * (hasDoubleRep ? 2 : 1);
         const coinGain = Math.floor(animalData.reputationReward * 0.5);
 
-        const completedCareEvents = animal.careEvents.filter(e => e.completed).map(e => e.title);
+        const completedCareEvents = animal.careEvents.filter(e => e.completed);
+        const preferredMatches = completedCareEvents.filter(e => e.wasPreferred).length;
+
         const recoveryRecord: RecoveryRecord = {
           id: generateId(),
           animalId: animalData.id,
           animalName: animalData.name,
           animalEmoji: animalData.emoji,
+          animalPersonality: animalData.personalityLabel,
+          preferredCare: CARE_TYPE_LABELS[animalData.preferredCare],
           rescueDate: animal.rescueDate,
           releaseDate: state.day,
-          careEvents: completedCareEvents,
+          careEvents: completedCareEvents.map(e => e.title),
+          preferredCareMatches: preferredMatches,
           totalDays: state.day - animal.rescueDate,
           notes: RECOVERY_NOTES[Math.floor(Math.random() * RECOVERY_NOTES.length)],
         };
@@ -310,13 +406,25 @@ export const useGameStore = create<GameStore>()(
           return t;
         });
 
+        get().earnReputation(repGain);
+        get().earnCoins(coinGain);
+
         set({
           rescuedAnimals: state.rescuedAnimals.filter(a => a.id !== rescuedId),
           careSlots: newSlots,
-          reputation: state.reputation + repGain,
-          coins: state.coins + coinGain,
           tasks: newTasks,
           recoveryRecords: [...state.recoveryRecords, recoveryRecord],
+          currentDayLedger: {
+            ...state.currentDayLedger,
+            animalsReleased: state.currentDayLedger.animalsReleased + 1,
+          },
+          festivalStats: state.activeFestival
+            ? {
+                ...state.festivalStats,
+                animalsReleased: state.festivalStats.animalsReleased + 1,
+                releasedAnimalNames: [...state.festivalStats.releasedAnimalNames, animalData.name],
+              }
+            : state.festivalStats,
         });
       },
 
@@ -325,8 +433,8 @@ export const useGameStore = create<GameStore>()(
         const currentCount = state.inventory.reduce((sum, i) => sum + i.quantity, 0);
 
         if (item.type === 'trash') {
+          get().earnCoins(item.value);
           set(state => ({
-            coins: state.coins + item.value,
             tasks: state.tasks.map(t => {
               if (t.id === 'collect_5' && !t.completed) {
                 const newProgress = Math.min(t.progress + 1, t.target);
@@ -338,6 +446,10 @@ export const useGameStore = create<GameStore>()(
               }
               return t;
             }),
+            currentDayLedger: {
+              ...state.currentDayLedger,
+              itemsCollected: state.currentDayLedger.itemsCollected + 1,
+            },
           }));
           return true;
         }
@@ -370,6 +482,10 @@ export const useGameStore = create<GameStore>()(
             }
             return t;
           }),
+          currentDayLedger: {
+            ...state.currentDayLedger,
+            itemsCollected: state.currentDayLedger.itemsCollected + 1,
+          },
         }));
         return true;
       },
@@ -406,10 +522,10 @@ export const useGameStore = create<GameStore>()(
         const state = get();
         const nextLevel = WAREHOUSE_LEVELS.find(l => l.level === state.warehouseLevel + 1);
         if (!nextLevel || state.coins < nextLevel.upgradeCost) return false;
+        get().spendCoins(nextLevel.upgradeCost);
         set({
           warehouseLevel: nextLevel.level,
           warehouseCapacity: nextLevel.capacity,
-          coins: state.coins - nextLevel.upgradeCost,
         });
         return true;
       },
@@ -421,9 +537,9 @@ export const useGameStore = create<GameStore>()(
         const costs: Record<number, number> = { 2: 150, 3: 400, 4: 1000, 5: 2500 };
         const cost = costs[slot.level] || 9999;
         if (state.coins < cost) return false;
+        get().spendCoins(cost);
         set({
           careSlots: state.careSlots.map(s => s.id === slotId ? { ...s, unlocked: true } : s),
-          coins: state.coins - cost,
         });
         return true;
       },
@@ -433,9 +549,10 @@ export const useGameStore = create<GameStore>()(
         const decoration = DECORATIONS.find(d => d.id === decorationId);
         if (!decoration || state.decorations.includes(decorationId)) return false;
         if (state.coins < decoration.cost) return false;
+        if (state.stationLevel < decoration.unlockLevel) return false;
+        get().spendCoins(decoration.cost);
         set({
           decorations: [...state.decorations, decorationId],
-          coins: state.coins - decoration.cost,
         });
         return true;
       },
@@ -444,18 +561,26 @@ export const useGameStore = create<GameStore>()(
         const state = get();
         const task = state.tasks.find(t => t.id === taskId);
         if (!task || !task.completed || task.claimed) return;
-        let newState: Partial<GameState> = {};
-        if (task.reward.type === 'coins') newState.coins = state.coins + task.reward.amount;
-        else if (task.reward.type === 'reputation') newState.reputation = state.reputation + task.reward.amount;
-        newState.tasks = state.tasks.map(t => t.id === taskId ? { ...t, claimed: true } : t);
-        set(newState);
+        if (task.reward.type === 'coins') {
+          get().earnCoins(task.reward.amount);
+        } else if (task.reward.type === 'reputation') {
+          get().earnReputation(task.reward.amount);
+        }
+        set({
+          tasks: state.tasks.map(t => t.id === taskId ? { ...t, claimed: true } : t),
+          festivalStats: state.activeFestival && task.type === 'festival'
+            ? {
+                ...state.festivalStats,
+                tasksClaimed: state.festivalStats.tasksClaimed + 1,
+              }
+            : state.festivalStats,
+        });
       },
 
       nextDay: () => {
         const state = get();
         const newDay = state.day + 1;
         const newWeather = getRandomWeather();
-        let festivalStats: FestivalStats = initialFestivalStats;
 
         const newAnimals = state.rescuedAnimals.map(animal => {
           if (animal.status === 'recovering' && animal.careSlotId) {
@@ -483,23 +608,37 @@ export const useGameStore = create<GameStore>()(
 
         let newFestival = state.activeFestival;
         let newFestivalLogs = state.festivalLogs;
+        let festivalStats = state.festivalStats;
 
         if (newFestival) {
-          const remaining = newFestival.remainingDays - 1;
+          const currentFestival = newFestival;
+          const remaining = currentFestival.remainingDays - 1;
           if (remaining <= 0) {
+            const completedTasks = state.tasks.filter(
+              t => t.type === 'festival' && t.festivalId === currentFestival.id && t.completed
+            ).length;
             const log: FestivalLog = {
               id: generateId(),
-              festivalId: newFestival.id,
-              festivalName: newFestival.name,
-              festivalEmoji: newFestival.emoji,
-              startDay: newFestival.startDay,
+              festivalId: currentFestival.id,
+              festivalName: currentFestival.name,
+              festivalEmoji: currentFestival.emoji,
+              startDay: currentFestival.startDay,
               endDay: state.day,
-              ...festivalStats,
+              animalsRescued: festivalStats.animalsRescued,
+              animalsReleased: festivalStats.animalsReleased,
+              coinsEarned: festivalStats.coinsEarned,
+              coinsSpent: festivalStats.coinsSpent,
+              reputationEarned: festivalStats.reputationEarned,
+              tasksCompleted: completedTasks,
+              tasksClaimed: festivalStats.tasksClaimed,
+              rescuedAnimalNames: festivalStats.rescuedAnimalNames,
+              releasedAnimalNames: festivalStats.releasedAnimalNames,
             };
             newFestivalLogs = [...state.festivalLogs, log];
             newFestival = undefined;
+            festivalStats = initialFestivalStats;
           } else {
-            newFestival = { ...newFestival, remainingDays: remaining };
+            newFestival = { ...currentFestival, remainingDays: remaining };
           }
         } else if (Math.random() < 0.12) {
           const festivalTemplate = FESTIVALS[Math.floor(Math.random() * FESTIVALS.length)];
@@ -508,6 +647,7 @@ export const useGameStore = create<GameStore>()(
             startDay: newDay,
             remainingDays: festivalTemplate.duration,
           };
+          festivalStats = initialFestivalStats;
         }
 
         let newTasks = state.tasks.map(t => {
@@ -515,8 +655,16 @@ export const useGameStore = create<GameStore>()(
           return t;
         });
 
+        const newCompletedTasks = newTasks.map(t => {
+          if (t.type === 'festival' && t.festivalId === state.activeFestival?.id && !t.completed) {
+            return { ...t };
+          }
+          return t;
+        });
+        const festivalCompletedNow = newCompletedTasks.filter(t => t.completed).length;
         if (state.activeFestival && !newFestival) {
           newTasks = newTasks.filter(t => t.type !== 'festival');
+          festivalStats.tasksCompleted = festivalCompletedNow;
         }
         if (newFestival && !state.activeFestival) {
           const festivalTasks = FESTIVAL_TASKS[newFestival.id] || [];
@@ -524,6 +672,12 @@ export const useGameStore = create<GameStore>()(
         }
 
         const giftCoins = newFestival?.effects.includes('daily_gift') ? 50 : 0;
+        if (giftCoins > 0) {
+          get().earnCoins(giftCoins);
+        }
+
+        const completedLedger = { ...state.currentDayLedger };
+        const newLedger = createEmptyLedger(newDay);
 
         set({
           day: newDay,
@@ -532,13 +686,14 @@ export const useGameStore = create<GameStore>()(
           tasks: newTasks,
           activeFestival: newFestival,
           festivalLogs: newFestivalLogs,
-          coins: state.coins + giftCoins,
           lastBeachSearch: undefined,
-          pendingItems: [],
+          dailyLedgers: [...state.dailyLedgers, completedLedger],
+          currentDayLedger: newLedger,
+          festivalStats: festivalStats,
         });
       },
 
-      addCoins: (amount) => set(state => ({ coins: state.coins + amount })),
+      addCoins: (amount) => get().earnCoins(amount),
 
       addItem: (itemId, quantity) => {
         const state = get();
@@ -579,7 +734,8 @@ export const useGameStore = create<GameStore>()(
           if (!itemData) return false;
           newInventory = [...state.inventory, { ...itemData, quantity }];
         }
-        set({ inventory: newInventory, coins: state.coins - totalCost });
+        get().spendCoins(totalCost);
+        set({ inventory: newInventory });
         return true;
       },
 
@@ -592,9 +748,13 @@ export const useGameStore = create<GameStore>()(
         };
         const price = sellPrices[itemId] || 1;
         const totalPrice = price * quantity;
+        get().earnCoins(totalPrice);
         set({
           inventory: state.inventory.map(i => i.id === itemId ? { ...i, quantity: i.quantity - quantity } : i).filter(i => i.quantity > 0),
-          coins: state.coins + totalPrice,
+          currentDayLedger: {
+            ...state.currentDayLedger,
+            itemsSold: state.currentDayLedger.itemsSold + quantity,
+          },
         });
         return true;
       },
@@ -604,22 +764,32 @@ export const useGameStore = create<GameStore>()(
         const food = state.inventory.find(i => i.id === 'food');
         if (!food || food.quantity < 1) return;
 
+        const animal = state.rescuedAnimals.find(a => a.id === rescuedId);
+        const animalData = ANIMALS.find(a => a.id === animal?.animalId);
+        if (!animal || !animalData) return;
+
         set({
           inventory: state.inventory.map(i => i.id === 'food' ? { ...i, quantity: i.quantity - 1 } : i),
           rescuedAnimals: state.rescuedAnimals.map(a => {
             if (a.id === rescuedId) {
+              const completedEvent = a.careEvents.find(e => e.id === eventId);
+              if (!completedEvent || completedEvent.completed) return a;
+              const isPreferred = animalData.preferredCare === completedEvent.type;
+              const baseReward = completedEvent.reward;
+              const boostReward = isPreferred ? Math.floor(baseReward * 1.5) : baseReward;
+              const healthBoost = isPreferred ? 5 : 3;
               const newEvents = a.careEvents.map(e => {
                 if (e.id === eventId && !e.completed) {
-                  return { ...e, completed: true };
+                  return { ...e, completed: true, wasPreferred: isPreferred };
                 }
                 return e;
               });
-              const completedEvent = a.careEvents.find(e => e.id === eventId);
               return {
                 ...a,
                 careEvents: newEvents,
-                recoverySpeedBoost: a.recoverySpeedBoost + (completedEvent?.reward || 5),
-                health: Math.min(a.health + 3, a.maxHealth),
+                recoverySpeedBoost: a.recoverySpeedBoost + boostReward,
+                health: Math.min(a.health + healthBoost, a.maxHealth),
+                preferredCareMatches: a.preferredCareMatches + (isPreferred ? 1 : 0),
               };
             }
             return a;
@@ -629,7 +799,24 @@ export const useGameStore = create<GameStore>()(
 
       getRecoveryRecords: () => get().recoveryRecords,
       getFestivalLogs: () => get().festivalLogs,
+
+      getStationLevel: () => {
+        const state = get();
+        return STATION_LEVELS.find(l => l.level === state.stationLevel) || STATION_LEVELS[0];
+      },
+
+      getNextStationLevel: () => {
+        const state = get();
+        return STATION_LEVELS.find(l => l.level === state.stationLevel + 1) || null;
+      },
+
+      getCurrentLedger: () => get().currentDayLedger,
+
+      getRecentLedgers: (days) => {
+        const state = get();
+        return [...state.dailyLedgers].slice(-days).reverse();
+      },
     }),
-    { name: 'island-rescue-game-v2' }
+    { name: 'island-rescue-game-v3' }
   )
 );

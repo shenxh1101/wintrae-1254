@@ -144,7 +144,13 @@ export const AlbumScene = () => {
                       <div className="text-6xl">{record.animalEmoji}</div>
                       <div className="flex-1">
                         <h3 className="text-xl font-bold text-gray-800">{record.animalName}</h3>
-                        <div className="flex gap-3 mt-1 flex-wrap">
+                        <div className="flex gap-3 mt-2 flex-wrap">
+                          <span className="text-xs bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-medium">
+                            {record.animalPersonality}
+                          </span>
+                          <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
+                            偏爱{record.preferredCare}
+                          </span>
                           <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
                             📅 第 {record.rescueDate} 天救助
                           </span>
@@ -160,8 +166,15 @@ export const AlbumScene = () => {
                     <div className="bg-white rounded-xl p-4 mb-3">
                       <p className="text-gray-700 italic">"{record.notes}"</p>
                     </div>
+                    {record.preferredCareMatches > 0 && (
+                      <div className="bg-gradient-to-r from-green-100 to-emerald-100 rounded-xl p-3 mb-3 border border-green-300">
+                        <p className="text-sm text-green-800 font-medium">
+                          💖 康复统计：共完成 {record.careEvents.length} 次照护，其中 <span className="text-green-600 font-bold">{record.preferredCareMatches}</span> 次匹配它的偏好，恢复得特别快！
+                        </p>
+                      </div>
+                    )}
                     {record.careEvents.length > 0 && (
-                      <div className="mt-3">
+                      <div className="mt-2">
                         <p className="text-xs text-gray-500 mb-2 font-medium">💝 照护互动:</p>
                         <div className="flex flex-wrap gap-2">
                           {record.careEvents.map((event, idx) => (

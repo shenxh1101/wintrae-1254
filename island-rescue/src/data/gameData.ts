@@ -1,4 +1,30 @@
-import { Animal, Weather, InventoryItem, BeachFind, Task, FestivalEvent, Decoration, CareSlot } from '../types/game';
+import {
+  Animal,
+  Weather,
+  InventoryItem,
+  BeachFind,
+  Task,
+  FestivalEvent,
+  Decoration,
+  CareSlot,
+  StationLevel,
+  UpgradePath,
+  DailyLedger,
+} from '../types/game';
+
+export const PERSONALITY_LABELS: Record<string, string> = {
+  timid: '胆小',
+  greedy: '贪吃',
+  playful: '爱玩',
+  gentle: '温顺',
+  curious: '好奇',
+};
+
+export const CARE_TYPE_LABELS: Record<string, string> = {
+  feed: '喂食',
+  clean: '清洁',
+  play: '玩耍',
+};
 
 export const ANIMALS: Animal[] = [
   {
@@ -9,7 +35,10 @@ export const ANIMALS: Animal[] = [
     rarity: 'common',
     recoveryDays: 2,
     story: '小海鸥在暴风雨中迷失了方向，撞到了礁石上。在救助站的悉心照料下，它终于能够再次展翅高飞了！',
-    reputationReward: 10
+    reputationReward: 10,
+    personality: 'curious',
+    preferredCare: 'feed',
+    personalityLabel: '好奇',
   },
   {
     id: 'turtle',
@@ -19,7 +48,10 @@ export const ANIMALS: Animal[] = [
     rarity: 'common',
     recoveryDays: 3,
     story: '这只小海龟被渔网缠住了，幸好被及时发现。康复后，它慢悠悠地爬回了大海的怀抱。',
-    reputationReward: 15
+    reputationReward: 15,
+    personality: 'gentle',
+    preferredCare: 'clean',
+    personalityLabel: '温顺',
   },
   {
     id: 'seal',
@@ -29,7 +61,10 @@ export const ANIMALS: Animal[] = [
     rarity: 'uncommon',
     recoveryDays: 5,
     story: '海豹宝宝和妈妈走散了，还不小心被石头划伤了鳍。经过精心照料，它终于恢复健康，回到了海豹群中。',
-    reputationReward: 30
+    reputationReward: 30,
+    personality: 'greedy',
+    preferredCare: 'feed',
+    personalityLabel: '贪吃',
   },
   {
     id: 'penguin',
@@ -39,7 +74,10 @@ export const ANIMALS: Animal[] = [
     rarity: 'uncommon',
     recoveryDays: 4,
     story: '这只小企鹅随着洋流漂到了温暖的海域，又累又饿。在救助站吃饱喝足后，被送回了它的家乡。',
-    reputationReward: 25
+    reputationReward: 25,
+    personality: 'timid',
+    preferredCare: 'play',
+    personalityLabel: '胆小',
   },
   {
     id: 'dolphin',
@@ -49,7 +87,10 @@ export const ANIMALS: Animal[] = [
     rarity: 'rare',
     recoveryDays: 7,
     story: '海豚被废弃的渔网缠住了尾巴，挣扎了很久才被发现。康复后的它欢快地跃出水面，好像在说谢谢呢！',
-    reputationReward: 50
+    reputationReward: 50,
+    personality: 'playful',
+    preferredCare: 'play',
+    personalityLabel: '爱玩',
   },
   {
     id: 'octopus',
@@ -59,7 +100,10 @@ export const ANIMALS: Animal[] = [
     rarity: 'rare',
     recoveryDays: 6,
     story: '小章鱼在探索沉船时不小心被锋利的金属划伤了触手。在救助站的悉心照料下，它的触手慢慢长好了。',
-    reputationReward: 45
+    reputationReward: 45,
+    personality: 'curious',
+    preferredCare: 'clean',
+    personalityLabel: '好奇',
   },
   {
     id: 'whale',
@@ -69,7 +113,10 @@ export const ANIMALS: Animal[] = [
     rarity: 'legendary',
     recoveryDays: 14,
     story: '小白鲸在迁徙途中与族群走散了，因为体力不支搁浅在海滩上。经过漫长的康复期，它终于回到了大海，与家人团聚。',
-    reputationReward: 100
+    reputationReward: 100,
+    personality: 'gentle',
+    preferredCare: 'feed',
+    personalityLabel: '温顺',
   },
   {
     id: 'crab',
@@ -79,7 +126,10 @@ export const ANIMALS: Animal[] = [
     rarity: 'common',
     recoveryDays: 2,
     story: '小螃蟹在和小伙伴打架时弄伤了壳。在救助站养了几天，它就挥舞着大钳子横着走回沙滩了。',
-    reputationReward: 8
+    reputationReward: 8,
+    personality: 'playful',
+    preferredCare: 'feed',
+    personalityLabel: '爱玩',
   },
   {
     id: 'jellyfish',
@@ -89,7 +139,10 @@ export const ANIMALS: Animal[] = [
     rarity: 'uncommon',
     recoveryDays: 4,
     story: '这只美丽的水母被冲到了浅水区，差点被太阳晒干。救助站把它放回了特制的水箱里，等它恢复后送回了深海。',
-    reputationReward: 20
+    reputationReward: 20,
+    personality: 'timid',
+    preferredCare: 'clean',
+    personalityLabel: '胆小',
   },
   {
     id: 'starfish',
@@ -99,7 +152,10 @@ export const ANIMALS: Animal[] = [
     rarity: 'common',
     recoveryDays: 3,
     story: '小海星在躲避捕食者时断掉了一只腕。不过别担心，海星的腕是可以再生的！在救助站的照顾下，它很快就长出了新的腕。',
-    reputationReward: 12
+    reputationReward: 12,
+    personality: 'gentle',
+    preferredCare: 'clean',
+    personalityLabel: '温顺',
   },
   {
     id: 'shrimp',
@@ -109,7 +165,10 @@ export const ANIMALS: Animal[] = [
     rarity: 'common',
     recoveryDays: 1,
     story: '这只小虾被海浪冲到了礁石缝里，差点被困住。获救后，它欢快地游回了珊瑚礁。',
-    reputationReward: 5
+    reputationReward: 5,
+    personality: 'timid',
+    preferredCare: 'feed',
+    personalityLabel: '胆小',
   },
   {
     id: 'swordfish',
@@ -119,8 +178,76 @@ export const ANIMALS: Animal[] = [
     rarity: 'rare',
     recoveryDays: 8,
     story: '剑鱼在追逐猎物时不小心撞上了船舷，撞晕了过去。在救助站的精心照料下，它慢慢恢复了活力。',
-    reputationReward: 60
-  }
+    reputationReward: 60,
+    personality: 'greedy',
+    preferredCare: 'play',
+    personalityLabel: '贪吃',
+  },
+];
+
+export const STATION_LEVELS: StationLevel[] = [
+  {
+    level: 1,
+    name: '初创救助站',
+    requiredReputation: 0,
+    description: '刚起步的小型救助站，只能救助最常见的动物',
+    unlocks: ['基础照护位 x2', '基础医疗物资'],
+  },
+  {
+    level: 2,
+    name: '成长救助站',
+    requiredReputation: 100,
+    description: '初具规模，可以救助更多种类的动物',
+    unlocks: ['高级照护位解锁', '更多装饰可购买', '每周任务开启'],
+  },
+  {
+    level: 3,
+    name: '知名救助站',
+    requiredReputation: 300,
+    description: '小有名气的救助站，志愿者纷纷前来帮忙',
+    unlocks: ['特级照护位解锁', '稀有动物出现率提升', '每日奖励翻倍'],
+  },
+  {
+    level: 4,
+    name: '模范救助站',
+    requiredReputation: 600,
+    description: '成为区域模范，获得政府资助',
+    unlocks: ['豪华照护位解锁', '传说动物出现率提升', '特殊任务开启'],
+  },
+  {
+    level: 5,
+    name: '国家级救助站',
+    requiredReputation: 1000,
+    description: '全国知名的海洋动物救助中心',
+    unlocks: ['所有照护位可用', '所有装饰可购买', '节日活动概率提升'],
+  },
+];
+
+export const UPGRADE_PATHS: UpgradePath[] = [
+  {
+    id: 'medical',
+    name: '医疗升级',
+    description: '提升治疗效果，减少治疗次数',
+    icon: '💊',
+    maxLevel: 3,
+    effects: ['治疗效果 +20%', '治疗效果 +40%', '治疗效果 +60%'],
+  },
+  {
+    id: 'recovery',
+    name: '康复升级',
+    description: '提升所有照护位的恢复速度',
+    icon: '💚',
+    maxLevel: 3,
+    effects: ['恢复速度 +10%', '恢复速度 +25%', '恢复速度 +50%'],
+  },
+  {
+    id: 'exploration',
+    name: '探索升级',
+    description: '提升海岸巡查的发现率',
+    icon: '🔍',
+    maxLevel: 3,
+    effects: ['动物发现率 +15%', '漂流物发现率 +20%', '稀有发现率 +10%'],
+  },
 ];
 
 export const WEATHERS: Weather[] = [
@@ -131,7 +258,7 @@ export const WEATHERS: Weather[] = [
     description: '阳光明媚，适合出海',
     animalSpawnRate: 1.0,
     driftwoodSpawnRate: 1.0,
-    canGoOut: true
+    canGoOut: true,
   },
   {
     id: 'cloudy',
@@ -140,7 +267,7 @@ export const WEATHERS: Weather[] = [
     description: '多云天气，动物更多了',
     animalSpawnRate: 1.2,
     driftwoodSpawnRate: 1.0,
-    canGoOut: true
+    canGoOut: true,
   },
   {
     id: 'rainy',
@@ -149,7 +276,7 @@ export const WEATHERS: Weather[] = [
     description: '下雨了，漂流物更多',
     animalSpawnRate: 0.8,
     driftwoodSpawnRate: 1.5,
-    canGoOut: true
+    canGoOut: true,
   },
   {
     id: 'storm',
@@ -158,7 +285,7 @@ export const WEATHERS: Weather[] = [
     description: '暴风雨来了，不要出海哦',
     animalSpawnRate: 1.5,
     driftwoodSpawnRate: 2.0,
-    canGoOut: false
+    canGoOut: false,
   },
   {
     id: 'foggy',
@@ -167,8 +294,8 @@ export const WEATHERS: Weather[] = [
     description: '大雾弥漫，视线不好',
     animalSpawnRate: 0.6,
     driftwoodSpawnRate: 0.8,
-    canGoOut: true
-  }
+    canGoOut: true,
+  },
 ];
 
 export const INITIAL_INVENTORY: InventoryItem[] = [
@@ -201,7 +328,7 @@ export const INITIAL_TASKS: Task[] = [
     progress: 0,
     reward: { type: 'coins', amount: 50 },
     completed: false,
-    claimed: false
+    claimed: false,
   },
   {
     id: 'release_1',
@@ -212,7 +339,7 @@ export const INITIAL_TASKS: Task[] = [
     progress: 0,
     reward: { type: 'reputation', amount: 20 },
     completed: false,
-    claimed: false
+    claimed: false,
   },
   {
     id: 'collect_5',
@@ -223,7 +350,7 @@ export const INITIAL_TASKS: Task[] = [
     progress: 0,
     reward: { type: 'coins', amount: 30 },
     completed: false,
-    claimed: false
+    claimed: false,
   },
   {
     id: 'rescue_10',
@@ -234,7 +361,7 @@ export const INITIAL_TASKS: Task[] = [
     progress: 0,
     reward: { type: 'coins', amount: 200 },
     completed: false,
-    claimed: false
+    claimed: false,
   },
 ];
 
@@ -392,17 +519,19 @@ export const RECOVERY_NOTES = [
   '喜欢和救助站的其他小伙伴一起玩耍。',
   '一开始有点怕人，后来变得特别亲人。',
   '恢复速度比预期的还要快，体质很棒！',
+  '特别喜欢被人抚摸，每次都会舒服地眯起眼睛。',
+  '康复期间最喜欢晒太阳，总是趴在温暖的地方。',
 ];
 
 export const DECORATIONS: Decoration[] = [
-  { id: 'flag', name: '彩旗', emoji: '🚩', cost: 50, description: '让救助站更有节日气氛' },
-  { id: 'flower', name: '花朵', emoji: '🌸', cost: 30, description: '美丽的热带花朵' },
-  { id: 'palm', name: '棕榈树', emoji: '🌴', cost: 100, description: '海岛标志性的棕榈树' },
-  { id: 'umbrella', name: '遮阳伞', emoji: '⛱️', cost: 80, description: '休息时的好伙伴' },
-  { id: 'boat', name: '小木船', emoji: '🛶', cost: 200, description: '装饰用的小木船' },
-  { id: 'lighthouse', name: '灯塔模型', emoji: '🗼', cost: 500, description: '迷你版的灯塔' },
-  { id: 'fountain', name: '喷泉', emoji: '⛲', cost: 300, description: '清凉的小喷泉' },
-  { id: 'bench', name: '长椅', emoji: '🪑', cost: 60, description: '休息用的长椅' },
+  { id: 'flag', name: '彩旗', emoji: '🚩', cost: 50, description: '让救助站更有节日气氛', unlockLevel: 1 },
+  { id: 'flower', name: '花朵', emoji: '🌸', cost: 30, description: '美丽的热带花朵', unlockLevel: 1 },
+  { id: 'palm', name: '棕榈树', emoji: '🌴', cost: 100, description: '海岛标志性的棕榈树', unlockLevel: 1 },
+  { id: 'umbrella', name: '遮阳伞', emoji: '⛱️', cost: 80, description: '休息时的好伙伴', unlockLevel: 1 },
+  { id: 'bench', name: '长椅', emoji: '🪑', cost: 60, description: '休息用的长椅', unlockLevel: 1 },
+  { id: 'boat', name: '小木船', emoji: '🛶', cost: 200, description: '装饰用的小木船', unlockLevel: 2 },
+  { id: 'fountain', name: '喷泉', emoji: '⛲', cost: 300, description: '清凉的小喷泉', unlockLevel: 2 },
+  { id: 'lighthouse', name: '灯塔模型', emoji: '🗼', cost: 500, description: '迷你版的灯塔', unlockLevel: 3 },
 ];
 
 export const INITIAL_CARE_SLOTS: CareSlot[] = [
@@ -420,3 +549,14 @@ export const WAREHOUSE_LEVELS = [
   { level: 4, capacity: 500, upgradeCost: 800 },
   { level: 5, capacity: 1000, upgradeCost: 2000 },
 ];
+
+export const createEmptyLedger = (day: number): DailyLedger => ({
+  day,
+  coinsEarned: 0,
+  coinsSpent: 0,
+  reputationEarned: 0,
+  animalsRescued: 0,
+  animalsReleased: 0,
+  itemsCollected: 0,
+  itemsSold: 0,
+});

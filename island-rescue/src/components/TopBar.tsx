@@ -1,7 +1,9 @@
 import { useGameStore } from '../store/useGameStore';
 
 export const TopBar = () => {
-  const { day, reputation, coins, currentWeather, activeFestival, nextDay, pendingItems } = useGameStore();
+  const { day, reputation, coins, currentWeather, activeFestival, nextDay, pendingItems, getStationLevel, getNextStationLevel } = useGameStore();
+  const stationLevel = getStationLevel();
+  const nextLevel = getNextStationLevel();
 
   return (
     <div className="bg-gradient-to-r from-ocean-600 to-ocean-500 text-white p-3 shadow-lg">
@@ -32,6 +34,17 @@ export const TopBar = () => {
               </span>
             </div>
           )}
+          <div className="flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full px-3 py-1 shadow-md">
+            <span className="text-xl">🏛️</span>
+            <div>
+              <span className="font-bold text-sm">Lv.{stationLevel.level} {stationLevel.name}</span>
+              {nextLevel && (
+                <span className="text-xs block opacity-90">
+                  还差 {nextLevel.requiredReputation - reputation} 声望升级
+                </span>
+              )}
+            </div>
+          </div>
         </div>
         
         <div className="flex items-center gap-3">

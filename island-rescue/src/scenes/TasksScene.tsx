@@ -120,7 +120,7 @@ export const TasksScene = () => {
               </div>
             </div>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-3">
             <div className="bg-white rounded-lg p-2 text-center">
               <p className="text-xs text-gray-500">救助动物</p>
               <p className="font-bold text-pink-600">🐾 {log.animalsRescued}</p>
@@ -130,18 +130,46 @@ export const TasksScene = () => {
               <p className="font-bold text-green-600">🌊 {log.animalsReleased}</p>
             </div>
             <div className="bg-white rounded-lg p-2 text-center">
-              <p className="text-xs text-gray-500">获得金币</p>
-              <p className="font-bold text-amber-600">🪙 {log.coinsEarned}</p>
+              <p className="text-xs text-gray-500">金币收入</p>
+              <p className="font-bold text-amber-600">🪙 +{log.coinsEarned}</p>
+            </div>
+            <div className="bg-white rounded-lg p-2 text-center">
+              <p className="text-xs text-gray-500">金币支出</p>
+              <p className="font-bold text-red-600">🪙 -{log.coinsSpent}</p>
             </div>
             <div className="bg-white rounded-lg p-2 text-center">
               <p className="text-xs text-gray-500">获得声望</p>
-              <p className="font-bold text-purple-600">⭐ {log.reputationEarned}</p>
+              <p className="font-bold text-purple-600">⭐ +{log.reputationEarned}</p>
             </div>
             <div className="bg-white rounded-lg p-2 text-center">
-              <p className="text-xs text-gray-500">完成任务</p>
-              <p className="font-bold text-blue-600">✅ {log.tasksCompleted}</p>
+              <p className="text-xs text-gray-500">完成/领取任务</p>
+              <p className="font-bold text-blue-600">✅ {log.tasksCompleted}/{log.tasksClaimed}</p>
             </div>
           </div>
+          {log.rescuedAnimalNames.length > 0 && (
+            <div className="bg-white/60 rounded-lg p-2 mb-2">
+              <p className="text-xs text-gray-500 mb-1">🐾 救助的动物：</p>
+              <div className="flex flex-wrap gap-1">
+                {log.rescuedAnimalNames.map((name, idx) => (
+                  <span key={idx} className="text-xs bg-pink-100 text-pink-700 px-2 py-0.5 rounded-full">
+                    {name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          {log.releasedAnimalNames.length > 0 && (
+            <div className="bg-white/60 rounded-lg p-2">
+              <p className="text-xs text-gray-500 mb-1">🌊 放归的动物：</p>
+              <div className="flex flex-wrap gap-1">
+                {log.releasedAnimalNames.map((name, idx) => (
+                  <span key={idx} className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                    {name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       ))}
     </div>
@@ -149,18 +177,35 @@ export const TasksScene = () => {
 
   const renderRecoveryRecordList = () => (
     <div className="space-y-3">
-      {recoveryRecords.map((record: RecoveryRecord) => (
+      {recoveryRecords.map(record => (
         <div key={record.id} className="bg-gradient-to-r from-green-50 to-blue-50 rounded-xl p-4 border-2 border-green-200">
           <div className="flex items-start gap-3 mb-3">
             <span className="text-4xl">{record.animalEmoji}</span>
             <div className="flex-1">
               <h4 className="font-bold text-gray-800 text-lg">{record.animalName}</h4>
-              <p className="text-xs text-gray-500">救助: 第 {record.rescueDate} 天 | 放归: 第 {record.releaseDate} 天 | 共 {record.totalDays} 天</p>
+              <div className="flex flex-wrap gap-1 mt-1">
+                <span className="text-xs bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full">
+                  {record.animalPersonality}
+                </span>
+                <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+                  偏爱{record.preferredCare}
+                </span>
+                <span className="text-xs bg-gray-500">
+                  第{record.rescueDate}天~第{record.releaseDate}天({record.totalDays}天)
+                </span>
+              </div>
             </div>
           </div>
           <div className="bg-white rounded-lg p-3 mb-3">
             <p className="text-sm text-gray-600 italic">"{record.notes}"</p>
           </div>
+          {record.preferredCareMatches > 0 && (
+            <div className="bg-green-100 rounded-lg p-2 mb-2">
+              <p className="text-xs text-green-700 font-medium">
+                💖 共完成 {record.careEvents.length} 次照护，其中 {record.preferredCareMatches} 次匹配偏好，恢复得特别快！
+              </p>
+            </div>
+          )}
           {record.careEvents.length > 0 && (
             <div>
               <p className="text-xs text-gray-500 mb-1">照护互动:</p>
